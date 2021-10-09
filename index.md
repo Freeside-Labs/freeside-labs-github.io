@@ -9,5 +9,4 @@ title: "Freeside Labs"
 * Software Development
 * Simulation
 
-## Contact
-[email](younes@freesidelabs.com)
+[Contact](mailto:younes@freesidelabs.com)
