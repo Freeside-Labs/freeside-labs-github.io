@@ -6,9 +6,11 @@ email: "freeside.labs@gmail.com"
 ---
 
 
-## Engineering Services:
+# Engineering Services:
 * Guidance, Navigation and Control
+* Model Based Control System Design and Analysis
 * Software Development
+* Hardware Testing
 * Simulation
 
-[Contact](mailto:freeside.labs@gmail.com)
+[Contact](mailto:younes@freesidelabs.com)
