@@ -2,7 +2,7 @@
 layout: default
 title: Home
 author: "Freeside Labs"
-email: "Freeside.Labs@gmail.com"
+email: "freeside.labs@gmail.com"
 ---
 
 
@@ -11,4 +11,4 @@ email: "Freeside.Labs@gmail.com"
 * Software Development
 * Simulation
 
-[Contact](mailto:younes@freesidelabs.com)
+[Contact](mailto:freeside.labs@gmail.com)
