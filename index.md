@@ -1,6 +1,6 @@
 ---
-layout: home
-title: "Freeside Labs"
+layout: default
+title: Home
 author: "Freeside Labs"
 email: "Freeside.Labs@gmail.com"
 ---
