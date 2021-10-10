@@ -1,6 +1,8 @@
 ---
 layout: home
 title: "Freeside Labs"
+author: "Freeside Labs"
+email: "Freeside.Labs@gmail.com"
 ---
 
 
