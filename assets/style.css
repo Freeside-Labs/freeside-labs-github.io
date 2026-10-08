@@ -201,7 +201,6 @@ h1 em, .contact h2 em { font-style: normal; color: var(--orange); }
 .readout th { text-align: left; color: var(--cd); font-weight: 400; padding-right: 1rem; width: 4.5em; }
 .readout td { font-variant-numeric: tabular-nums; white-space: nowrap; }
 #t-mode.lock { color: #0c1f15; background: var(--c); padding: 0 .3em; text-shadow: none; }
-.scope__note { font: 400 .78rem/1.5 var(--mono); color: var(--cd); margin: .8rem 0 0; text-shadow: none; }
 
 .caps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1px; background: var(--cd); border: 1px solid var(--cd); align-self: start; }
 .caps li { background: var(--crt); padding: 1rem 1.1rem 1.2rem; }
