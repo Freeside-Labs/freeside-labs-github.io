@@ -1,0 +1,190 @@
+// Freeside Labs — UTC clock + a small attitude simulation for the console.
+"use strict";
+
+(() => {
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---- UTC clock / year ----
+  const utc = document.getElementById("utc");
+  const pad = (n) => String(n).padStart(2, "0");
+  const tick = () => {
+    const d = new Date();
+    utc.textContent = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+  };
+  tick();
+  setInterval(tick, 1000);
+  document.getElementById("year").textContent = new Date().getFullYear();
+
+  // SMIL orbit in the hero respects reduced motion too
+  if (reduceMotion) document.querySelector(".orbit-art")?.pauseAnimations?.();
+
+  // ---- quaternion helpers, [w, x, y, z], scalar first ----
+  const qmul = (a, b) => [
+    a[0] * b[0] - a[1] * b[1] - a[2] * b[2] - a[3] * b[3],
+    a[0] * b[1] + a[1] * b[0] + a[2] * b[3] - a[3] * b[2],
+    a[0] * b[2] - a[1] * b[3] + a[2] * b[0] + a[3] * b[1],
+    a[0] * b[3] + a[1] * b[2] - a[2] * b[1] + a[3] * b[0],
+  ];
+  const qconj = (q) => [q[0], -q[1], -q[2], -q[3]];
+  const qnorm = (q) => { const n = Math.hypot(...q); return q.map((c) => c / n); };
+  const qaxis = (axis, ang) => { const s = Math.sin(ang / 2); return [Math.cos(ang / 2), axis[0] * s, axis[1] * s, axis[2] * s]; };
+  const rotate = (q, v) => qmul(qmul(q, [0, ...v]), qconj(q)).slice(1);
+  const errAngle = (a, b) => 2 * Math.acos(Math.min(1, Math.abs(qmul(qconj(a), b)[0])));
+  const randomQ = () => {
+    // Shoemake uniform random rotation
+    const [u1, u2, u3] = [Math.random(), Math.random(), Math.random()];
+    const a = Math.sqrt(1 - u1), b = Math.sqrt(u1);
+    return [a * Math.sin(2 * Math.PI * u2), a * Math.cos(2 * Math.PI * u2), b * Math.sin(2 * Math.PI * u3), b * Math.cos(2 * Math.PI * u3)];
+  };
+  const toAxisAngle = (q) => {
+    if (q[0] < 0) q = q.map((c) => -c); // shortest path
+    const ang = 2 * Math.acos(Math.min(1, q[0]));
+    const s = Math.sqrt(Math.max(1e-12, 1 - q[0] * q[0]));
+    return { axis: [q[1] / s, q[2] / s, q[3] / s], ang };
+  };
+
+  // ---- console ----
+  const canvas = document.getElementById("att");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const W = 360, H = 300;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  ctx.scale(dpr, dpr);
+
+  const out = {
+    mode: document.getElementById("t-mode"),
+    q: document.getElementById("t-q"),
+    w: document.getElementById("t-w"),
+    err: document.getElementById("t-err"),
+    t: document.getElementById("t-t"),
+  };
+  const css = getComputedStyle(document.querySelector(".console .crt"));
+  const PHOS = css.getPropertyValue("--c").trim() || "#7cf3a2";
+  const DIM = css.getPropertyValue("--cd").trim() || "#3f9563";
+
+  // Spacecraft wireframe in body axes: bus cube, two solar wings on ±y, boresight on +z.
+  const edges = [];
+  const box = (sx, sy, sz, cx = 0, cy = 0, cz = 0) => {
+    const v = [];
+    for (const x of [-sx, sx]) for (const y of [-sy, sy]) for (const z of [-sz, sz]) v.push([x + cx, y + cy, z + cz]);
+    [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]]
+      .forEach(([a, b]) => edges.push([v[a], v[b]]));
+  };
+  box(0.45, 0.45, 0.55);
+  box(0.32, 0.6, 0.02, 0, 1.1, 0);
+  box(0.32, 0.6, 0.02, 0, -1.1, 0);
+  edges.push([[0, 0.45, 0], [0, 0.5, 0]], [[0, -0.45, 0], [0, -0.5, 0]]);
+  for (const s of [1, -1]) for (const y of [0.8, 1.1, 1.4]) edges.push([[-0.32, s * y, 0], [0.32, s * y, 0]]);
+  const boresight = [[0, 0, 0.55], [0, 0, 1.6]];
+
+  // Fixed camera: tilt the inertial frame so the view isn't face-on.
+  const cam = qmul(qaxis([1, 0, 0], -1.05), qaxis([0, 0, 1], 0.6));
+  const project = (v) => {
+    const p = rotate(cam, v);
+    const d = 5.2, f = 300 / (d - p[1]);
+    return [W / 2 + p[0] * f * 0.95, H / 2 - p[2] * f * 0.95];
+  };
+  const line = (a, b) => { const [x1, y1] = project(a), [x2, y2] = project(b); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); };
+
+  // ---- guidance: rest-to-rest eigenaxis slews with a cycloidal angle profile ----
+  let q = [1, 0, 0, 0], q0 = q, qT = q, slew = null, phase = "INIT", phaseT = 0, settle = null;
+  const t0 = performance.now();
+
+  const newSlew = () => {
+    q0 = q; qT = randomQ();
+    const { axis, ang } = toAxisAngle(qmul(qconj(q0), qT));
+    const dur = 2.2 + (ang * 180 / Math.PI) / 45; // ~45°/s average, it's a demo
+    slew = { axis, ang, dur };
+    phase = "SLEW"; phaseT = 0;
+  };
+
+  let wDeg = 0;
+  const step = (dt) => {
+    phaseT += dt;
+    if (phase === "INIT" && phaseT > 0.8) newSlew();
+    else if (phase === "SLEW") {
+      const s = Math.min(1, phaseT / slew.dur);
+      const th = slew.ang * (s - Math.sin(2 * Math.PI * s) / (2 * Math.PI));
+      wDeg = (slew.ang * (1 - Math.cos(2 * Math.PI * s)) / slew.dur) * 180 / Math.PI;
+      q = qmul(q0, qaxis(slew.axis, th));
+      if (s >= 1) { phase = "SETTLE"; phaseT = 0; settle = randomQ().slice(1); }
+    } else if (phase === "SETTLE") {
+      // decaying residual from flex modes / controller transient
+      const a = 0.006 * Math.exp(-phaseT / 0.45) * Math.sin(2 * Math.PI * 1.4 * phaseT);
+      const n = Math.hypot(...settle);
+      q = qmul(qT, qaxis(settle.map((c) => c / n), a));
+      wDeg = Math.abs(0.006 * Math.exp(-phaseT / 0.45) * 2 * Math.PI * 1.4) * 180 / Math.PI;
+      if (phaseT > 1.8) { phase = "LOCK"; phaseT = 0; }
+    } else if (phase === "LOCK") {
+      q = qnorm(qmul(qT, qaxis([0, 0, 1], (Math.random() - 0.5) * 6e-5)));
+      wDeg = Math.random() * 2e-3;
+      if (phaseT > 2.6) newSlew();
+    }
+  };
+
+  const fmt = (x) => (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(4);
+  const render = () => {
+    ctx.clearRect(0, 0, W, H);
+    ctx.lineWidth = 1;
+    ctx.shadowBlur = 0;
+
+    // inertial reference ring + axes
+    ctx.strokeStyle = DIM;
+    ctx.globalAlpha = 0.6;
+    ctx.beginPath();
+    for (let i = 0; i <= 64; i++) {
+      const a = (i / 64) * 2 * Math.PI, [x, y] = project([2 * Math.cos(a), 2 * Math.sin(a), 0]);
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    line([-2.2, 0, 0], [2.2, 0, 0]); line([0, -2.2, 0], [0, 2.2, 0]); line([0, 0, -1.6], [0, 0, 1.9]);
+    ctx.stroke();
+
+    // target boresight (dashed)
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); line(rotate(qT, boresight[0]), rotate(qT, boresight[1]).map((c) => c * 1.15)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+
+    // spacecraft
+    ctx.strokeStyle = PHOS;
+    ctx.shadowColor = PHOS;
+    ctx.shadowBlur = 6;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    for (const [a, b] of edges) line(rotate(q, a), rotate(q, b));
+    ctx.stroke();
+    ctx.lineWidth = 2.2;
+    ctx.beginPath(); line(rotate(q, boresight[0]), rotate(q, boresight[1])); ctx.stroke();
+
+    // readouts
+    const err = errAngle(q, qT) * 180 / Math.PI;
+    out.mode.textContent = phase;
+    out.mode.classList.toggle("lock", phase === "LOCK");
+    out.q.textContent = q.map(fmt).join(" ");
+    out.w.textContent = `${wDeg.toFixed(3)} °/s`;
+    out.err.textContent = `${err.toFixed(3)} °`;
+    const el = Math.floor((performance.now() - t0) / 1000);
+    out.t.textContent = `${pad(Math.floor(el / 3600))}:${pad(Math.floor(el / 60) % 60)}:${pad(el % 60)}`;
+  };
+
+  if (reduceMotion) {
+    // one still frame, held on target
+    qT = q = qnorm([0.82, 0.31, -0.28, 0.39]);
+    phase = "LOCK";
+    render();
+    return;
+  }
+
+  let visible = true, last = performance.now();
+  new IntersectionObserver(([e]) => { visible = e.isIntersecting; last = performance.now(); }).observe(canvas);
+  const loop = (now) => {
+    if (visible) {
+      step(Math.min(0.05, (now - last) / 1000));
+      render();
+    }
+    last = now;
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+})();
