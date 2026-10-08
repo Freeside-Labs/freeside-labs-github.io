@@ -15,8 +15,31 @@
   setInterval(tick, 1000);
   document.getElementById("year").textContent = new Date().getFullYear();
 
-  // SMIL orbit in the hero respects reduced motion too
-  if (reduceMotion) document.querySelector(".orbit-art")?.pauseAnimations?.();
+  // ---- hero orbit: the satellite passes behind the planet on the far half ----
+  const sat = document.getElementById("sat");
+  const satBack = document.getElementById("satBack");
+  const satFront = document.getElementById("satFront");
+  const ORBIT = { cx: 200, cy: 200, rx: 185, ry: 62, tilt: -18 * Math.PI / 180, period: 14 };
+  const placeSat = (th) => {
+    const ex = ORBIT.rx * Math.cos(th), ey = ORBIT.ry * Math.sin(th);
+    const c = Math.cos(ORBIT.tilt), s = Math.sin(ORBIT.tilt);
+    const x = ORBIT.cx + ex * c - ey * s, y = ORBIT.cy + ex * s + ey * c;
+    const behind = ey < 0; // far side of the ring
+    const layer = behind ? satBack : satFront;
+    if (sat.parentNode !== layer) layer.appendChild(sat);
+    // tangent heading, plus a little foreshortening on the far side
+    const tx = -ORBIT.rx * Math.sin(th), ty = ORBIT.ry * Math.cos(th);
+    const ang = Math.atan2(tx * s + ty * c, tx * c - ty * s) * 180 / Math.PI;
+    const k = 0.8 + 0.2 * Math.sin(th);
+    sat.setAttribute("transform", `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${ang.toFixed(1)}) scale(${k.toFixed(3)})`);
+  };
+  if (sat) {
+    if (reduceMotion) placeSat(2.6);
+    else {
+      const orbit = (now) => { placeSat((now / 1000 / ORBIT.period) * 2 * Math.PI); requestAnimationFrame(orbit); };
+      requestAnimationFrame(orbit);
+    }
+  }
 
   // ---- quaternion helpers, [w, x, y, z], scalar first ----
   const qmul = (a, b) => [
@@ -123,11 +146,11 @@
     }
   };
 
+  let lastText = 0, lastPhase = "";
   const fmt = (x) => (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(4);
   const render = () => {
     ctx.clearRect(0, 0, W, H);
     ctx.lineWidth = 1;
-    ctx.shadowBlur = 0;
 
     // inertial reference ring + axes
     ctx.strokeStyle = DIM;
@@ -146,18 +169,18 @@
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
 
-    // spacecraft
+    // spacecraft: one path, stroked wide+faint then thin+bright for a cheap phosphor glow
     ctx.strokeStyle = PHOS;
-    ctx.shadowColor = PHOS;
-    ctx.shadowBlur = 6;
-    ctx.lineWidth = 1.4;
     ctx.beginPath();
     for (const [a, b] of edges) line(rotate(q, a), rotate(q, b));
-    ctx.stroke();
-    ctx.lineWidth = 2.2;
-    ctx.beginPath(); line(rotate(q, boresight[0]), rotate(q, boresight[1])); ctx.stroke();
+    line(rotate(q, boresight[0]), rotate(q, boresight[1]));
+    ctx.globalAlpha = 0.18; ctx.lineWidth = 5; ctx.stroke();
+    ctx.globalAlpha = 1; ctx.lineWidth = 1.4; ctx.stroke();
 
-    // readouts
+    // readouts, throttled: text with glow is costly to repaint
+    const now = performance.now();
+    if (now - lastText < 100 && phase === lastPhase) return;
+    lastText = now; lastPhase = phase;
     const err = errAngle(q, qT) * 180 / Math.PI;
     out.mode.textContent = phase;
     out.mode.classList.toggle("lock", phase === "LOCK");

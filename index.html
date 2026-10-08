@@ -74,7 +74,8 @@
         <g class="sunburst">
           <path d="M200 200 L200 0 L230 0 Z M200 200 L400 170 L400 200 Z M200 200 L170 400 L200 400 Z M200 200 L0 230 L0 200 Z M200 200 L341 59 L362 80 Z M200 200 L341 341 L320 362 Z M200 200 L59 341 L38 320 Z M200 200 L59 59 L80 38 Z"/>
         </g>
-        <ellipse cx="200" cy="200" rx="185" ry="62" class="ring ring--back" transform="rotate(-18 200 200)"/>
+        <path d="M 15 200 A 185 62 0 0 1 385 200" class="ring ring--back" transform="rotate(-18 200 200)"/>
+        <g id="satBack"></g>
         <circle cx="200" cy="200" r="92" class="planet"/>
         <g clip-path="url(#planetClip)" class="planet__bands">
           <rect x="100" y="150" width="200" height="14"/>
@@ -83,14 +84,12 @@
           <rect x="100" y="262" width="200" height="6"/>
         </g>
         <path d="M 15 200 A 185 62 0 0 0 385 200" class="ring ring--front" transform="rotate(-18 200 200)"/>
-        <path id="orbitPath" d="M 15 200 a 185 62 0 1 0 370 0 a 185 62 0 1 0 -370 0" fill="none" transform="rotate(-18 200 200)"/>
-        <g class="sat">
-          <rect x="-7" y="-7" width="14" height="14" class="sat__bus"/>
-          <rect x="-30" y="-4" width="20" height="8" class="sat__panel"/>
-          <rect x="10" y="-4" width="20" height="8" class="sat__panel"/>
-          <animateMotion dur="14s" repeatCount="indefinite" rotate="auto">
-            <mpath href="#orbitPath"/>
-          </animateMotion>
+        <g id="satFront">
+          <g class="sat" id="sat" transform="translate(30 235)">
+            <rect x="-7" y="-7" width="14" height="14" class="sat__bus"/>
+            <rect x="-30" y="-4" width="20" height="8" class="sat__panel"/>
+            <rect x="10" y="-4" width="20" height="8" class="sat__panel"/>
+          </g>
         </g>
         <g class="stars">
           <circle cx="40" cy="60" r="2"/><circle cx="330" cy="40" r="1.5"/><circle cx="360" cy="320" r="2"/>

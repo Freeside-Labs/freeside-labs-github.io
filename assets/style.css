@@ -182,8 +182,7 @@ h1 em, .contact h2 em { font-style: normal; color: var(--orange); }
 }
 .crt::after { /* scanlines */
   content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
-  background: repeating-linear-gradient(to bottom, rgba(0,0,0,.28) 0 1px, transparent 1px 3px);
-  mix-blend-mode: multiply;
+  background: repeating-linear-gradient(to bottom, rgba(0,0,0,.22) 0 1px, transparent 1px 3px);
 }
 .crt--amber { --c: var(--amber); --cd: var(--amber-dim); }
 .crt__head {
