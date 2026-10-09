@@ -1,7 +1,7 @@
 "use strict";
 // Signet tuner: same geometry as the generator used for options a–d, with every knob exposed.
 (() => {
-  const D = { face: 50, tipY: 112, tipX: 6, sweep: 0.45, hug: 0.32, belly: 18, bellyIn: 0.4, apexY: 6, inset: 0.82, star: 0.36, starY: 0.12, starThin: 0.2, starColor: "silver", shade: 1 };
+  const D = { face: 50, tipY: 112, tipX: 6, sweep: 0.45, hug: 0.32, belly: 18, flow: 0.45, apexY: 6, inset: 0.82, star: 0.36, starY: 0.12, starThin: 0.2, starColor: "silver", shade: 1 };
   const KNOBS = [
     ["face", "Face half-width", 30, 70, 1],
     ["apexY", "Apex height", 0, 40, 1],
@@ -10,7 +10,7 @@
     ["hug", "Hug face edge", 0, 0.8, 0.01],
     ["sweep", "Leading sweep", 0.1, 0.95, 0.01],
     ["belly", "Belly depth", -20, 40, 1],
-    ["bellyIn", "Belly near face", -1, 1.5, 0.05],
+    ["flow", "Base flow-in", 0.05, 0.95, 0.01],
     ["inset", "Signet size", 0.5, 0.92, 0.01],
     ["star", "Star size", 0.1, 0.6, 0.01],
     ["starY", "Star offset", -0.4, 0.5, 0.01],
@@ -31,7 +31,8 @@
       const c1 = lerp(A, B, p.hug);
       const c2 = [cx + s * (cx - p.tipX) * p.sweep, T[1] - 2];
       const d1 = [T[0] - s * (cx - p.tipX) * 0.3, T[1] + p.belly];
-      const d2 = [B[0] - s * p.face * 0.1, B[1] + p.belly * p.bellyIn];
+      // arrive at the face corner on the baseline, running flat, so the underside flows into the base
+      const d2 = [B[0] + s * (cx - p.tipX - p.face) * p.flow, B[1]];
       return `M${f(A)} C${f(c1)} ${f(c2)} ${f(T)} C${f(d1)} ${f(d2)} ${f(B)} Z`;
     };
     const a = dist(BL, BR), b = dist(A, BR), c = dist(A, BL);
