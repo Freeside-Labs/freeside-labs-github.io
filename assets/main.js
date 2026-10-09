@@ -19,11 +19,97 @@
   const sat = document.getElementById("sat");
   const satBack = document.getElementById("satBack");
   const satFront = document.getElementById("satFront");
+  const satNight = document.getElementById("satNight");
   const ORBIT = { cx: 200, cy: 200, rx: 185, ry: 62, tilt: -18 * Math.PI / 180, period: 14 };
+  const PLANET_R = 92;
+
+  // 3D frame for the art: x right, y down, z toward the viewer, origin at the planet.
+  // The ring plane is spanned by u (along the long axis) and w (toward the viewer); n is its normal.
+  const sinE = ORBIT.ry / ORBIT.rx, cosE = Math.sqrt(1 - sinE * sinE);
+  const tc = Math.cos(ORBIT.tilt), ts = Math.sin(ORBIT.tilt);
+  const tiltV = ([x, y, z]) => [x * tc - y * ts, x * ts + y * tc, z];
+  const U = tiltV([1, 0, 0]), Wv = tiltV([0, sinE, cosE]), N = tiltV([0, -cosE, sinE]);
+  const dot3 = (p, q) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
+  // Sun 24° above the ring plane, 8° round toward the viewer: points at the sun drawn upper
+  // right (40° up from the planet) and still drops the planet's shadow across the back of the
+  // ring, so the satellite sees eclipse.
+  const SUN_AZ = 8 * Math.PI / 180, SUN_EL = 24 * Math.PI / 180;
+  const SUN = [0, 1, 2].map((i) =>
+    Math.cos(SUN_EL) * (Math.cos(SUN_AZ) * U[i] + Math.sin(SUN_AZ) * Wv[i]) + Math.sin(SUN_EL) * N[i]);
+  const smooth = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
+  const ringPoint = (th) => [0, 1, 2].map((i) => ORBIT.rx * (Math.cos(th) * U[i] + Math.sin(th) * Wv[i]));
+  // 1 deep in the planet's shadow, 0 in sunlight, soft over a few units of penumbra
+  const umbra = (p) => {
+    const k = dot3(p, SUN);
+    if (k >= 0) return 0;
+    const perp = Math.hypot(p[0] - k * SUN[0], p[1] - k * SUN[1], p[2] - k * SUN[2]);
+    return 1 - smooth(PLANET_R - 4, PLANET_R + 4, perp);
+  };
+
+  // ---- planet shading: Lambert terminator, limb glow, and the ring's shadow, rendered once ----
+  const shade = document.getElementById("planetShade");
+  if (shade) {
+    const SCALE = 3, S = 2 * PLANET_R * SCALE;
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = S;
+    const g = cv.getContext("2d");
+    const img = g.createImageData(S, S);
+    const NIGHT = [3, 16, 14], RIM = [201, 255, 244];
+    const nDotSun = dot3(N, SUN);
+    for (let j = 0; j < S; j++) {
+      for (let i = 0; i < S; i++) {
+        const nx = ((i + 0.5) / SCALE - PLANET_R) / PLANET_R, ny = ((j + 0.5) / SCALE - PLANET_R) / PLANET_R;
+        const r2 = nx * nx + ny * ny;
+        if (r2 > 1.04) continue;
+        const nz = Math.sqrt(Math.max(0, 1 - r2));
+        const lum = nx * SUN[0] + ny * SUN[1] + nz * SUN[2];
+        let dark = 0.74 * (1 - smooth(-0.12, 0.45, lum));
+        // ring shadow: walk from the surface toward the sun until the ring plane
+        const P = [nx * PLANET_R, ny * PLANET_R, nz * PLANET_R];
+        const t = -dot3(N, P) / nDotSun;
+        if (t > 0) {
+          const rho = Math.hypot(P[0] + t * SUN[0], P[1] + t * SUN[1], P[2] + t * SUN[2]);
+          const band = 1 - smooth(2, 12, Math.abs(rho - ORBIT.rx));
+          dark = 1 - (1 - dark) * (1 - 0.22 * band * smooth(0, 0.25, lum));
+        }
+        const rim = 0.45 * (1 - smooth(0, 0.22, nz)) * smooth(-0.05, 0.35, lum);
+        const hi = 0.18 * smooth(0.7, 1, lum);
+        // composite night, then rim glow, then sheen ("over")
+        let a = dark, c = NIGHT.map((v) => v * dark);
+        c = c.map((v, k) => RIM[k] * rim + v * (1 - rim)); a = rim + a * (1 - rim);
+        c = c.map((v) => 255 * hi + v * (1 - hi)); a = hi + a * (1 - hi);
+        const o = 4 * (j * S + i);
+        if (a > 0) { img.data[o] = c[0] / a; img.data[o + 1] = c[1] / a; img.data[o + 2] = c[2] / a; }
+        img.data[o + 3] = 255 * a;
+      }
+    }
+    g.putImageData(img, 0, 0);
+    shade.setAttribute("href", cv.toDataURL());
+  }
+
+  // ---- the planet's shadow across the back of the ring ----
+  const ringShadow = document.getElementById("ringShadow");
+  if (ringShadow) {
+    // one arc over the shadowed span plus a little penumbra; the gradient feathers both ends
+    const pts = [];
+    for (let deg = 0; deg < 360; deg += 1) {
+      const p = ringPoint(deg * Math.PI / 180);
+      if (umbra(p) > 0) pts.push([ORBIT.cx + p[0], ORBIT.cy + p[1]]);
+    }
+    if (pts.length > 1) {
+      ringShadow.setAttribute("d", "M" + pts.map((q) => q.map((v) => v.toFixed(1)).join(" ")).join(" L"));
+      const [a, b] = [pts[0], pts[pts.length - 1]];
+      const grad = document.getElementById("ringShadowGrad");
+      grad.setAttribute("x1", a[0]); grad.setAttribute("y1", a[1]);
+      grad.setAttribute("x2", b[0]); grad.setAttribute("y2", b[1]);
+    }
+  }
+
   const placeSat = (th) => {
     const ex = ORBIT.rx * Math.cos(th), ey = ORBIT.ry * Math.sin(th);
-    const c = Math.cos(ORBIT.tilt), s = Math.sin(ORBIT.tilt);
+    const c = tc, s = ts;
     const x = ORBIT.cx + ex * c - ey * s, y = ORBIT.cy + ex * s + ey * c;
+    if (satNight) satNight.setAttribute("opacity", (0.78 * umbra(ringPoint(th))).toFixed(2));
     const behind = ey < 0; // far side of the ring
     const layer = behind ? satBack : satFront;
     if (sat.parentNode !== layer) layer.appendChild(sat);

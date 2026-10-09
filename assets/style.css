@@ -144,14 +144,18 @@ h1 em, .contact h2 em { font-style: normal; color: var(--orange); }
 
 .hero__art { margin: 0; position: relative; }
 .orbit-art { width: 100%; height: auto; overflow: visible; }
-.sunburst path { fill: var(--mustard); opacity: .55; }
-.planet { fill: var(--teal); stroke: var(--ink); stroke-width: 3; }
-.planet__bands rect { fill: var(--ink); opacity: .22; }
-.ring { fill: none; stroke: var(--orange); stroke-width: 9; }
-.ring--back { opacity: .55; }
+.planet { fill: var(--teal); }
+.planet__outline { fill: none; stroke: var(--ink); stroke-width: 3; }
+.planet__bands path { fill: none; stroke: var(--ink); opacity: .22; }
+.ring { fill: none; stroke: url(#ringGrad); stroke-width: 9; }
+#ringGrad stop { stop-color: var(--orange); }
+.ring-shadow { fill: none; stroke: url(#ringShadowGrad); stroke-width: 9.5; opacity: .55; }
+#ringShadowGrad stop { stop-color: #03100e; }
+.sat__night rect { fill: #03100e; stroke: #03100e; stroke-width: 2; }
 .sat__bus { fill: var(--ink); }
 .sat__panel { fill: var(--paper); stroke: var(--ink); stroke-width: 2; }
-.stars circle { fill: var(--ink); }
+.stars circle, .stars use { fill: var(--ink); }
+.sun__star { fill: var(--mustard); }
 
 /* ---------- stripes + ticker ---------- */
 .stripes { display: grid; }
