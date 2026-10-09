@@ -63,7 +63,8 @@
         if (r2 > 1.04) continue;
         const nz = Math.sqrt(Math.max(0, 1 - r2));
         const lum = nx * SUN[0] + ny * SUN[1] + nz * SUN[2];
-        let dark = 0.74 * (1 - smooth(-0.12, 0.45, lum));
+        // wide ramp: the sun is near edge-on, so a narrow one draws the terminator as a line
+        let dark = 0.74 * (1 - smooth(-0.55, 0.55, lum));
         // ring shadow: walk from the surface toward the sun until the ring plane
         const P = [nx * PLANET_R, ny * PLANET_R, nz * PLANET_R];
         const t = -dot3(N, P) / nDotSun;
