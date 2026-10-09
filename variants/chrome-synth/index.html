@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Freeside Labs — Spacecraft GNC Engineering</title>
+  <meta name="description" content="Freeside Labs is an independent guidance, navigation and control consultancy: attitude guidance, estimation, control design, flight software and simulation for satellite programs.">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="fonts/michroma.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css">
+  <script src="main.js" defer></script>
+</head>
+<body>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<svg class="defs" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="chromeA" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/><stop offset=".45" stop-color="#b9c1cb"/>
+      <stop offset=".5" stop-color="#5b626c"/><stop offset=".62" stop-color="#d8dde3"/><stop offset="1" stop-color="#8b939d"/>
+    </linearGradient>
+    <linearGradient id="chromeB" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eef1f5"/><stop offset="1" stop-color="#7d858f"/>
+    </linearGradient>
+    <linearGradient id="chromeC" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9aa2ac"/><stop offset="1" stop-color="#3d434b"/>
+    </linearGradient>
+    <linearGradient id="chromeD" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#5a616a"/><stop offset="1" stop-color="#c9cfd6"/>
+    </linearGradient>
+    <symbol id="signet" viewBox="0 0 48 48">
+      <!-- signet face: four bevelled facets, one blackened with a star -->
+      <polygon points="4,4 44,4 24,24" fill="url(#chromeB)"/>
+      <polygon points="44,4 44,44 24,24" fill="url(#chromeC)"/>
+      <polygon points="44,44 4,44 24,24" fill="url(#chromeD)"/>
+      <polygon points="4,44 4,4 24,24" fill="#0a0a0e"/>
+      <polygon points="7,10 7,38 21,24" fill="#14141a"/>
+      <path d="M12.5 19.2 L13.5 23 L17.3 24 L13.5 25 L12.5 28.8 L11.5 25 L7.7 24 L11.5 23 Z" fill="#e9edf2"/>
+      <rect x="4" y="4" width="40" height="40" fill="none" stroke="#e9edf2" stroke-opacity=".55" stroke-width="1"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="sysbar" aria-hidden="true">
+  <span>FREESIDE LABS LLC</span>
+  <span class="sysbar__mid">GNC ENGINEERING // SEATTLE WA // EST. 2021</span>
+  <span>UTC <span id="utc">--:--:--</span></span>
+</div>
+
+  <header class="masthead">
+    <a class="brand" href="#top" aria-label="Freeside Labs home">
+      <svg class="brand__mark" aria-hidden="true"><use href="#signet"/></svg>
+      <span class="brand__word">Freeside Labs</span>
+    </a>
+    <nav aria-label="Primary">
+      <ul>
+        <li><a href="#console">Capabilities</a></li>
+        <li><a href="#heritage">Heritage</a></li>
+        <li><a href="#log">Log</a></li>
+        <li><a class="btn btn--small" href="#contact">Contact</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main id="main">
+
+    <section class="hero" id="top">
+      <div class="floor" aria-hidden="true"><div class="floor__grid"></div></div>
+      <div class="hero__text">
+        <h1 class="chrome">Freeside<br>Labs.</h1>
+        <p class="subhead">Spacecraft guidance,<br>navigation &amp; control</p>
+        <p class="lead">
+          Freeside Labs designs the algorithms and writes the flight software that
+          point satellites: slew planning, state estimation, control design, and the
+          simulations that prove them. One senior engineer with a decade-plus on
+          flight programs.
+        </p>
+        <div class="hero__cta">
+          <a class="btn" href="#contact">Start a conversation</a>
+          <a class="btn btn--ghost" href="#console">See the console&nbsp;↓</a>
+        </div>
+        <dl class="specs">
+          <div><dt>Since</dt><dd>2021</dd></div>
+          <div><dt>Flight GNC</dt><dd>12&nbsp;yrs</dd></div>
+          <div><dt>Toolchain</dt><dd>Rust · C++ · MATLAB</dd></div>
+        </dl>
+      </div>
+
+      <figure class="hero__art" aria-hidden="true">
+        <svg id="ridges" class="ridges" viewBox="0 0 520 440" preserveAspectRatio="xMidYMid meet"></svg>
+      </figure>
+    </section>
+
+  <div class="ticker" aria-hidden="true">
+    <div class="ticker__track">
+      <span>SLEW PLANNING ✦ MEKF ✦ STAR TRACKERS ✦ REACTION WHEELS ✦ CMGs ✦ FLEX-BODY DYNAMICS ✦ ROBUST CONTROL ✦ MONTE CARLO ✦ 6-DOF SIM ✦ RUST FLIGHT SOFTWARE ✦ PDR / CDR SUPPORT ✦ POINTING BUDGETS ✦&nbsp;</span>
+      <span>SLEW PLANNING ✦ MEKF ✦ STAR TRACKERS ✦ REACTION WHEELS ✦ CMGs ✦ FLEX-BODY DYNAMICS ✦ ROBUST CONTROL ✦ MONTE CARLO ✦ 6-DOF SIM ✦ RUST FLIGHT SOFTWARE ✦ PDR / CDR SUPPORT ✦ POINTING BUDGETS ✦&nbsp;</span>
+    </div>
+  </div>
+
+  <section class="console" id="console" aria-labelledby="console-title">
+    <div class="panel">
+      <header class="panel__head">
+        <h2 id="console-title">ADCS Console <span>// Capabilities</span></h2>
+        <span class="panel__tag"><span class="led" aria-hidden="true"></span>CH-01 · LIVE</span>
+      </header>
+
+      <div class="panel__body">
+        <div class="scope">
+          <canvas id="att" width="360" height="300" role="img" aria-label="Wireframe satellite performing attitude slews"></canvas>
+          <table class="readout" aria-label="Simulated attitude telemetry">
+            <tbody>
+              <tr><th>MODE</th><td id="t-mode">INIT</td></tr>
+              <tr><th>q</th><td id="t-q">+1.0000 +0.0000 +0.0000 +0.0000</td></tr>
+              <tr><th>|ω|</th><td id="t-w">0.000 °/s</td></tr>
+              <tr><th>ERR</th><td id="t-err">0.000 °</td></tr>
+              <tr><th>T+</th><td id="t-t">00:00:00</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <ol class="caps">
+          <li>
+            <h3><span>01</span> Attitude guidance</h3>
+            <p>Slew planning and agile maneuvering, pointing and jitter budgets, mission timeline studies.</p>
+          </li>
+          <li>
+            <h3><span>02</span> Estimation</h3>
+            <p>Attitude determination and Kalman filtering; star tracker, gyro and magnetometer modeling, calibration and alignment.</p>
+          </li>
+          <li>
+            <h3><span>03</span> Control</h3>
+            <p>Robust control design, stability and performance analysis, actuator sizing for wheels, CMGs and torque rods.</p>
+          </li>
+          <li>
+            <h3><span>04</span> Flexible-body dynamics</h3>
+            <p>Flex modeling and simulation, structure&ndash;control interaction, controllers that hold margin with real appendages.</p>
+          </li>
+          <li>
+            <h3><span>05</span> Flight &amp; embedded software</h3>
+            <p>GNC flight code in Rust, C++ and MATLAB/Simulink. Embedded controls heritage on New Glenn fluid systems, DO-178C requirements.</p>
+          </li>
+          <li>
+            <h3><span>06</span> Simulation &amp; V&amp;V</h3>
+            <p>Closed-loop 6-DOF simulation, Monte Carlo campaigns, flight-hardware characterization, PDR/CDR packages.</p>
+          </li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section class="heritage" id="heritage" aria-labelledby="heritage-title">
+    <h2 id="heritage-title" class="section-title">Heritage</h2>
+    <div class="heritage__grid">
+      <div>
+        <p class="label">Programs supported for</p>
+        <ul class="names">
+          <li>Maxar</li><li>MDA Space</li><li>Apex</li><li>True Anomaly</li>
+        </ul>
+      </div>
+      <div>
+        <p class="label">Before Freeside</p>
+        <ul class="names names--small">
+          <li>Blue Origin</li><li>Millennium Space Systems</li><li>NASA Goddard missions</li><li>SpaceX</li><li>Orbital Sciences</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="log" id="log" aria-labelledby="log-title">
+    <div class="panel panel--magenta">
+      <header class="panel__head">
+        <h2 id="log-title">Mission Log</h2>
+        <span class="panel__tag">YOUNES TALEB · PRINCIPAL</span>
+      </header>
+      <table class="logtable">
+        <thead><tr><th scope="col">EPOCH</th><th scope="col">STATION</th><th scope="col">ENTRY</th></tr></thead>
+        <tbody>
+          <tr><td>2021–NOW</td><td>Freeside Labs</td><td>Independent GNC engineering for commercial and defense satellite programs.</td></tr>
+          <tr><td>2018–2021</td><td>Blue Origin</td><td>Embedded controls for New Glenn pneumatic and hydraulic systems; DO-178C requirements tracing.</td></tr>
+          <tr><td>2016–2018</td><td>Millennium Space</td><td>ADCS design, star tracker and magnetics hardware; Altair Pathfinder flight operations.</td></tr>
+          <tr><td>2014–2016</td><td>a.i. solutions</td><td>Attitude ground systems for NASA's MMS and NICER missions.</td></tr>
+          <tr><td>2014</td><td>UIUC</td><td>Graduate research, CubeSat formation flying. M.Eng, Aerospace.</td></tr>
+          <tr><td>2011–2013</td><td>SpaceX · Orbital</td><td>Launch, test and avionics internships. B.S. Aerospace, Virginia Tech.</td></tr>
+        </tbody>
+      </table>
+      <div class="pubs">
+        <p class="pubs__head">// Publications</p>
+        <ul>
+          <li><a href="https://doi.org/10.2514/6.2015-2043" rel="noopener">Information-Driven Systems Engineering Study of a Formation Flying Demonstration Mission using Six CubeSats</a> — AIAA SciTech 2015</li>
+          <li><a href="https://doi.org/10.2514/6.2016-5424" rel="noopener">Operational Experience with the Wald Sequential Probability Ratio Test for Conjunction Assessment from the Magnetospheric MultiScale Mission</a> — AIAA/AAS Astrodynamics 2016</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="contact" id="contact" aria-labelledby="contact-title">
+    <div class="contact__card">
+      <svg class="contact__mark" aria-hidden="true"><use href="#signet"/></svg>
+      <h2 id="contact-title" class="chrome">Tell me about<br>your vehicle.</h2>
+      <p>
+        Analysis studies, fixed-price deliverables, or embedded support from
+        requirements through CDR and on to flight code.
+      </p>
+      <a class="btn btn--big" href="mailto:younes@freesidelabs.com">younes@freesidelabs.com</a>
+    </div>
+  </section>
+
+  </main>
+
+<footer class="foot">
+  <p>© <span id="year">2026</span> Freeside Labs LLC · Seattle, WA</p>
+</footer>
+
+</body>
+</html>
