@@ -79,12 +79,15 @@
     <figure class="hero__art" aria-hidden="true">
       <svg viewBox="0 0 400 400" class="orbit-art">
         <defs>
+          <mask id="offPlanet" maskUnits="userSpaceOnUse" x="0" y="0" width="400" height="400">
+            <rect width="400" height="400" fill="#fff"/><circle cx="200" cy="200" r="92" fill="#000"/>
+          </mask>
           <clipPath id="planetClip"><circle cx="200" cy="200" r="92"/></clipPath>
           <linearGradient id="ringGrad" gradientUnits="userSpaceOnUse" x1="200" y1="138" x2="200" y2="262">
-            <stop offset="0" stop-opacity=".4"/><stop offset=".5" stop-opacity=".8"/><stop offset="1" stop-opacity="1"/>
+            <stop offset="0"/><stop offset=".5"/><stop offset="1"/>
           </linearGradient>
           <linearGradient id="ringShadowGrad" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stop-opacity="0"/><stop offset=".3" stop-opacity="1"/><stop offset=".7" stop-opacity="1"/><stop offset="1" stop-opacity="0"/>
+            <stop offset="0" stop-opacity="0"/><stop offset=".4" stop-opacity="1"/><stop offset=".6" stop-opacity="1"/><stop offset="1" stop-opacity="0"/>
           </linearGradient>
           <path id="spark" d="M0 -1 Q0.12 -0.12 1 0 Q0.12 0.12 0 1 Q-0.12 0.12 -1 0 Q-0.12 -0.12 0 -1 Z"/>
         </defs>
@@ -92,8 +95,7 @@
           <path class="sun__star" d="M363.5 56.2 L365.0 28.0 L366.5 56.2 Z M370.8 60.5 L399.0 62.0 L370.8 63.5 Z M366.5 67.8 L365.0 96.0 L363.5 67.8 Z M359.2 63.5 L331.0 62.0 L359.2 60.5 Z M368.1 56.9 L379.1 47.9 L370.1 58.9 Z M370.1 65.1 L379.1 76.1 L368.1 67.1 Z M361.9 67.1 L350.9 76.1 L359.9 65.1 Z M359.9 58.9 L350.9 47.9 L361.9 56.9 Z"/>
           <circle cx="365" cy="62" r="9" class="sun__star"/>
         </g>
-        <path d="M 15 200 A 185 62 0 0 1 385 200" class="ring ring--back" transform="rotate(-18 200 200)"/>
-        <path id="ringShadow" class="ring-shadow"/>
+        <ellipse cx="200" cy="200" rx="185" ry="62" class="ring ring--back" transform="rotate(-18 200 200)"/>
         <g id="satBack"></g>
         <circle cx="200" cy="200" r="92" class="planet"/>
         <g clip-path="url(#planetClip)" class="planet__bands">
@@ -105,6 +107,7 @@
         <image id="planetShade" x="108" y="108" width="184" height="184" clip-path="url(#planetClip)"/>
         <circle cx="200" cy="200" r="92" class="planet__outline"/>
         <path d="M 15 200 A 185 62 0 0 0 385 200" class="ring ring--front" transform="rotate(-18 200 200)"/>
+        <path id="ringShadow" class="ring-shadow" mask="url(#offPlanet)"/>
         <g id="satFront">
           <g class="sat" id="sat" transform="translate(30 235)">
             <rect x="-7" y="-7" width="14" height="14" class="sat__bus"/>

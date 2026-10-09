@@ -43,7 +43,7 @@
     const k = dot3(p, SUN);
     if (k >= 0) return 0;
     const perp = Math.hypot(p[0] - k * SUN[0], p[1] - k * SUN[1], p[2] - k * SUN[2]);
-    return 1 - smooth(PLANET_R - 4, PLANET_R + 4, perp);
+    return 1 - smooth(PLANET_R - 10, PLANET_R + 10, perp);
   };
 
   // ---- planet shading: Lambert terminator, limb glow, and the ring's shadow, rendered once ----
@@ -89,9 +89,11 @@
   }
 
   // ---- the planet's shadow across the back of the ring ----
+  // One path drawn over the whole ring, so it wraps round the end without a seam; the mask
+  // hides it where the back of the ring is behind the planet. The sun is on the viewer's side,
+  // so no shadowed stretch of ring is ever in front of the planet.
   const ringShadow = document.getElementById("ringShadow");
   if (ringShadow) {
-    // one arc over the shadowed span plus a little penumbra; the gradient feathers both ends
     const pts = [];
     for (let deg = 0; deg < 360; deg += 1) {
       const p = ringPoint(deg * Math.PI / 180);
