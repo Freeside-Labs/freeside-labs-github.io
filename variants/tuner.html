@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'none'">
+<meta name="robots" content="noindex">
+<title>Signet Tuner</title>
+<link rel="stylesheet" href="tuner.css">
+<script src="tuner.js" defer></script>
+</head>
+<body>
+<main>
+  <h1>Signet tuner</h1>
+  <div class="stage">
+    <div class="big"><svg id="big" viewBox="0 0 240 150"></svg></div>
+    <div class="smalls">
+      <span class="t cream"><svg class="sm" viewBox="0 0 240 150"><use href="#live"/></svg></span>
+      <span class="t ink"><svg class="sm" viewBox="0 0 240 150"><use href="#live"/></svg></span>
+      <span class="t teal"><svg class="md" viewBox="0 0 240 150"><use href="#live"/></svg></span>
+    </div>
+  </div>
+  <form id="knobs" class="knobs"></form>
+  <p class="out">Settings — paste this back to Claude:</p>
+  <output id="code"></output>
+  <button type="button" id="reset">Reset to d</button>
+</main>
+</body>
+</html>
