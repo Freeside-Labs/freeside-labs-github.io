@@ -87,16 +87,7 @@ a { color: inherit; }
 }
 .brand { display: flex; align-items: center; gap: .6rem; text-decoration: none; }
 .defs { position: absolute; width: 0; height: 0; overflow: hidden; }
-.brand__mark { width: 46px; height: 38px; }
-
-/* signet — screen-print silver, fixed tones so it reads as metal in both themes */
-.sg-top   { fill: #f3f0e8; }
-.sg-left  { fill: #bdb9b0; }
-.sg-right { fill: #8d8a83; }
-.sg-bot   { fill: #5b5953; }
-.sg-inset { fill: #141310; }
-.sg-star  { fill: var(--mustard); }
-.sg-edge  { fill: none; stroke: #1c1a16; stroke-width: 1.6; stroke-linejoin: round; }
+.brand__mark { width: 36px; height: 39px; }
 .brand__word { font: 800 1.7rem/1 var(--display); text-transform: uppercase; letter-spacing: .02em; }
 .brand__word span { color: var(--orange); margin-left: .25em; }
 .masthead ul { list-style: none; display: flex; align-items: center; gap: clamp(.6rem, 2vw, 1.6rem); margin: 0; padding: 0; }
@@ -257,7 +248,7 @@ h1 em, .contact h2 em { font-style: normal; color: var(--orange); }
 }
 .seal {
   position: absolute; right: clamp(1rem, 4vw, 3rem); top: clamp(1rem, 4vw, 3rem);
-  width: clamp(88px, 16vw, 190px); height: auto; transform: rotate(-9deg);
+  width: clamp(80px, 13vw, 160px); height: auto; transform: rotate(-9deg);
   filter: drop-shadow(6px 6px 0 rgba(0,0,0,.35));
 }
 @media (max-width: 640px) { .seal { position: static; margin: 0 0 1.2rem; transform: rotate(-6deg); } }

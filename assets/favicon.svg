@@ -1,1 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" rx="7" fill="#efe5cf"/><g transform="translate(0 4)"><polygon points="2,3 46,3 36,12 12,12" fill="#f3f0e8"/><polygon points="46,3 46,37 36,28 36,12" fill="#8d8a83"/><polygon points="46,37 2,37 12,28 36,28" fill="#5b5953"/><polygon points="2,37 2,3 12,12 12,28" fill="#bdb9b0"/><rect x="12" y="12" width="24" height="16" fill="#141310"/><path d="M27.5 14.6 L28.5 19 L32.9 20 L28.5 21 L27.5 25.4 L26.5 21 L22.1 20 L26.5 19 Z" fill="#e1a52c"/><polygon points="2,3 46,3 46,37 2,37" fill="none" stroke="#1c1a16" stroke-width="2" stroke-linejoin="round"/></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-14 -6 148 142"><rect x="-14" y="-6" width="148" height="142" rx="18" fill="#efe5cf"/>
+  <g stroke="#1c1a16" stroke-width="3.5" stroke-linejoin="round">
+    <!-- band: thicker at the shoulders, thin at the base -->
+    <path fill="#bdb9b0" fill-rule="evenodd" d="M14,80 a46,44 0 1,0 92,0 a46,44 0 1,0 -92,0 Z M30,88 a30,29 0 1,0 60,0 a30,29 0 1,0 -60,0 Z"/>
+    <!-- inner wall seen through the hole -->
+    <path fill="#5b5953" d="M30,88 a30,29 0 0,1 60,0 a30,20 0 0,0 -60,0 Z"/>
+    <!-- head front face, sweeping into the shoulders -->
+    <path fill="#8d8a83" d="M16,40 L104,40 L96,58 Q60,50 24,58 Z"/>
+    <!-- head top face, split on the diagonal -->
+    <polygon fill="#f3f0e8" points="26,18 94,18 104,40 16,40"/>
+    <polygon fill="#141310" points="27,21 19,38 98,38"/>
+  </g>
+  <path fill="none" stroke="#f3f0e8" stroke-width="3.5" stroke-linecap="round" d="M22,98 A46,44 0 0,0 52,123"/>
+  <path fill="#e1a52c" d="M38,26.5 L39.6,31 L44,32.2 L39.6,33.4 L38,38 L36.4,33.4 L32,32.2 L36.4,31 Z"/>
+</svg>
