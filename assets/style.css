@@ -86,8 +86,17 @@ a { color: inherit; }
   border-bottom: 3px double var(--ink);
 }
 .brand { display: flex; align-items: center; gap: .6rem; text-decoration: none; }
-.brand__mark { width: 40px; height: 40px; color: var(--ink); }
-.brand__sat { fill: var(--orange); }
+.defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+.brand__mark { width: 46px; height: 38px; }
+
+/* signet — screen-print silver, fixed tones so it reads as metal in both themes */
+.sg-top   { fill: #f3f0e8; }
+.sg-left  { fill: #bdb9b0; }
+.sg-right { fill: #8d8a83; }
+.sg-bot   { fill: #5b5953; }
+.sg-inset { fill: #141310; }
+.sg-star  { fill: var(--mustard); }
+.sg-edge  { fill: none; stroke: #1c1a16; stroke-width: 1.6; stroke-linejoin: round; }
 .brand__word { font: 800 1.7rem/1 var(--display); text-transform: uppercase; letter-spacing: .02em; }
 .brand__word span { color: var(--orange); margin-left: .25em; }
 .masthead ul { list-style: none; display: flex; align-items: center; gap: clamp(.6rem, 2vw, 1.6rem); margin: 0; padding: 0; }
@@ -240,11 +249,18 @@ h1 em, .contact h2 em { font-style: normal; color: var(--orange); }
 /* ---------- contact ---------- */
 .contact { max-width: var(--max); margin: 0 auto; padding: clamp(1rem, 3vw, 2rem) var(--gutter) clamp(3rem, 7vw, 6rem); }
 .contact__card {
+  position: relative; overflow: hidden;
   background: var(--teal); color: var(--on-accent);
   border: 3px solid var(--ink); box-shadow: 10px 10px 0 var(--ink);
   padding: clamp(1.6rem, 5vw, 3.6rem);
   background-image: repeating-radial-gradient(circle at 105% 120%, transparent 0 34px, rgba(255,255,255,.06) 34px 36px);
 }
+.seal {
+  position: absolute; right: clamp(1rem, 4vw, 3rem); top: clamp(1rem, 4vw, 3rem);
+  width: clamp(88px, 16vw, 190px); height: auto; transform: rotate(-9deg);
+  filter: drop-shadow(6px 6px 0 rgba(0,0,0,.35));
+}
+@media (max-width: 640px) { .seal { position: static; margin: 0 0 1.2rem; transform: rotate(-6deg); } }
 .contact h2 { font: 800 clamp(2.4rem, 7vw, 5rem)/.9 var(--display); text-transform: uppercase; margin: 0 0 1.2rem; }
 .contact h2 em { color: var(--mustard); }
 .contact p { max-width: 34em; font-size: 1.1rem; margin: 0 0 2rem; }
