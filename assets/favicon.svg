@@ -1,15 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-14 -6 148 142"><rect x="-14" y="-6" width="148" height="142" rx="18" fill="#efe5cf"/>
-  <g stroke="#1c1a16" stroke-width="3.5" stroke-linejoin="round">
-    <!-- band: thicker at the shoulders, thin at the base -->
-    <path fill="#bdb9b0" fill-rule="evenodd" d="M14,80 a46,44 0 1,0 92,0 a46,44 0 1,0 -92,0 Z M30,88 a30,29 0 1,0 60,0 a30,29 0 1,0 -60,0 Z"/>
-    <!-- inner wall seen through the hole -->
-    <path fill="#5b5953" d="M30,88 a30,29 0 0,1 60,0 a30,20 0 0,0 -60,0 Z"/>
-    <!-- head front face, sweeping into the shoulders -->
-    <path fill="#8d8a83" d="M16,40 L104,40 L96,58 Q60,50 24,58 Z"/>
-    <!-- head top face, split on the diagonal -->
-    <polygon fill="#f3f0e8" points="26,18 94,18 104,40 16,40"/>
-    <polygon fill="#141310" points="27,21 19,38 98,38"/>
-  </g>
-  <path fill="none" stroke="#f3f0e8" stroke-width="3.5" stroke-linecap="round" d="M22,98 A46,44 0 0,0 52,123"/>
-  <path fill="#e1a52c" d="M38,26.5 L39.6,31 L44,32.2 L39.6,33.4 L38,38 L36.4,33.4 L32,32.2 L36.4,31 Z"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-6 -39 252 228"><rect x="-6" y="-39" width="252" height="228" rx="30" fill="#efe5cf"/><g stroke="#1c1a16" stroke-width="3.4" stroke-linejoin="round"> <path fill="#b3afa6" d="M120.0 6.0 C106.2 32.4 68.3 118.0 5.0 120.0 C39.5 140.0 40.9 138.0 51.0 138.0 Z"/><path fill="#8d8a83" d="M120.0 6.0 C133.8 32.4 171.8 118.0 235.0 120.0 C200.5 140.0 199.1 138.0 189.0 138.0 Z"/> <polygon fill="#f3f0e8" points="120.0 6.0 189.0 138.0 51.0 138.0"/> <polygon fill="#141310" stroke-width="2.2" points="120.0 20.4 178.0 131.3 62.0 131.3"/></g> <path fill="#ece9e2" d="M120 90.7 L124.0 100.5 L133.8 104.5 L124.0 108.5 L120 118.3 L116.0 108.5 L106.2 104.5 L116.0 100.5 Z"/></svg>

@@ -87,7 +87,7 @@ a { color: inherit; }
 }
 .brand { display: flex; align-items: center; gap: .6rem; text-decoration: none; }
 .defs { position: absolute; width: 0; height: 0; overflow: hidden; }
-.brand__mark { width: 36px; height: 39px; }
+.brand__mark { width: 54px; height: 34px; }
 .brand__word { font: 800 1.7rem/1 var(--display); text-transform: uppercase; letter-spacing: .02em; }
 .brand__word span { color: var(--orange); margin-left: .25em; }
 .masthead ul { list-style: none; display: flex; align-items: center; gap: clamp(.6rem, 2vw, 1.6rem); margin: 0; padding: 0; }
@@ -248,7 +248,7 @@ h1 em, .contact h2 em { font-style: normal; color: var(--orange); }
 }
 .seal {
   position: absolute; right: clamp(1rem, 4vw, 3rem); top: clamp(1rem, 4vw, 3rem);
-  width: clamp(80px, 13vw, 160px); height: auto; transform: rotate(-9deg);
+  width: clamp(110px, 18vw, 230px); height: auto; transform: rotate(-6deg);
   filter: drop-shadow(6px 6px 0 rgba(0,0,0,.35));
 }
 @media (max-width: 640px) { .seal { position: static; margin: 0 0 1.2rem; transform: rotate(-6deg); } }
