@@ -152,11 +152,6 @@ h1 em, .contact h2 em { font-style: normal; color: var(--orange); }
 .sat__bus { fill: var(--ink); }
 .sat__panel { fill: var(--paper); stroke: var(--ink); stroke-width: 2; }
 .stars circle { fill: var(--ink); }
-.stamp {
-  position: absolute; right: 0; bottom: -.5rem;
-  font: 400 1.05rem/1 var(--pixel); text-transform: uppercase; letter-spacing: .05em;
-  background: var(--paper); border: 2px solid var(--ink); padding: .3rem .55rem; transform: rotate(-2deg);
-}
 
 /* ---------- stripes + ticker ---------- */
 .stripes { display: grid; }
