@@ -11,7 +11,7 @@
   --paper-2: #e4d5b4;
   --ink: #1c1a16;
   --ink-soft: #4d463b;
-  --orange: #d4501c;
+  --orange: #c24618;
   --teal: #14665f;
   --mustard: #e1a52c;
   --on-accent: #fff8ea;
@@ -21,7 +21,7 @@
   --phos: #7cf3a2;
   --phos-dim: #3f9563;
   --amber: #ffb547;
-  --amber-dim: #a3702a;
+  --amber-dim: #b07a2e;
 
   --display: "Shoulders", "Arial Narrow", Impact, sans-serif;
   --sans: "Plex Sans", system-ui, sans-serif;
@@ -241,7 +241,7 @@ h1 em, .contact h2 em { font-style: normal; color: var(--orange); }
 .contact { max-width: var(--max); margin: 0 auto; padding: clamp(1rem, 3vw, 2rem) var(--gutter) clamp(3rem, 7vw, 6rem); }
 .contact__card {
   position: relative; overflow: hidden;
-  background: var(--teal); color: var(--on-accent);
+  background: #14665f; color: #fff8ea; /* fixed in both themes: holds contrast for text and the mustard accent */
   border: 3px solid var(--ink); box-shadow: 10px 10px 0 var(--ink);
   padding: clamp(1.6rem, 5vw, 3.6rem);
   background-image: repeating-radial-gradient(circle at 105% 120%, transparent 0 34px, rgba(255,255,255,.06) 34px 36px);
