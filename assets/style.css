@@ -181,7 +181,7 @@ h1 em, .contact h2 em { font-style: normal; color: var(--orange); }
   box-shadow: var(--shadow), inset 0 0 70px rgba(0,0,0,.75), inset 0 0 0 10px #0f0f0c, inset 0 0 0 12px #2a2a22;
   padding: clamp(1.2rem, 3vw, 2.2rem);
   overflow: hidden;
-  text-shadow: 0 0 6px color-mix(in srgb, var(--c) 55%, transparent);
+  text-shadow: 0 0 2px color-mix(in srgb, var(--c) 45%, transparent);
 }
 .crt::after { /* scanlines */
   content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
@@ -193,7 +193,7 @@ h1 em, .contact h2 em { font-style: normal; color: var(--orange); }
   border-bottom: 1px dashed var(--cd); padding-bottom: .8rem; margin-bottom: 1.4rem;
 }
 .crt h2 { font: 400 clamp(1.6rem, 3.6vw, 2.3rem)/1 var(--pixel); letter-spacing: .05em; margin: 0; }
-.crt__tag { font: 400 1.1rem/1 var(--pixel); color: var(--cd); letter-spacing: .08em; }
+.crt__tag { font: 400 1.1rem/1 var(--pixel); color: var(--c); letter-spacing: .08em; text-shadow: none; }
 .blink { animation: blink 1.1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 
@@ -225,7 +225,7 @@ h1 em, .contact h2 em { font-style: normal; color: var(--orange); }
 
 /* ---------- mission log ---------- */
 .logtable { width: 100%; border-collapse: collapse; font: 400 .9rem/1.5 var(--mono); }
-.logtable th { font: 400 1.15rem/1 var(--pixel); text-align: left; color: var(--cd); letter-spacing: .08em; padding: 0 1rem .6rem 0; border-bottom: 1px solid var(--cd); }
+.logtable th { font: 400 1.15rem/1 var(--pixel); text-align: left; color: var(--c); text-shadow: none; letter-spacing: .08em; padding: 0 1rem .6rem 0; border-bottom: 1px solid var(--cd); }
 .logtable td { padding: .7rem 1rem .7rem 0; border-bottom: 1px dashed color-mix(in srgb, var(--cd) 50%, transparent); vertical-align: top; }
 .logtable td:first-child { font: 400 1.2rem/1.2 var(--pixel); white-space: nowrap; }
 .logtable td:nth-child(2) { font-weight: 500; text-transform: uppercase; white-space: nowrap; }
@@ -237,9 +237,13 @@ h1 em, .contact h2 em { font-style: normal; color: var(--orange); }
   .logtable td:last-child { grid-column: 1 / -1; padding-top: .3rem; }
 }
 .pubs { margin-top: 1.6rem; }
-.pubs__head { font: 400 1.2rem/1 var(--pixel); color: var(--cd); margin: 0 0 .5rem; }
-.pubs ul { margin: 0; padding-left: 1.1rem; font: 400 .85rem/1.5 var(--mono); text-shadow: none; }
-.pubs a { color: var(--c); text-underline-offset: 3px; }
+.pubs__head { font: 400 1.3rem/1 var(--pixel); letter-spacing: .08em; color: var(--c); text-shadow: none; margin: 0 0 .4rem; }
+.pubs ul { list-style: none; margin: 0; padding: 0; text-shadow: none; }
+.pubs li { padding: .7rem 0; border-bottom: 1px dashed color-mix(in srgb, var(--cd) 50%, transparent); }
+.pubs li:last-child { border-bottom: 0; }
+.pubs__venue { display: block; font: 400 1.1rem/1.1 var(--pixel); letter-spacing: .04em; margin-bottom: .25rem; }
+.pubs a { display: block; font: 500 .95rem/1.35 var(--sans); color: color-mix(in srgb, var(--c) 80%, white); text-decoration: none; }
+.pubs a:hover, .pubs a:focus-visible { text-decoration: underline; text-underline-offset: 3px; }
 
 /* ---------- contact ---------- */
 .contact { max-width: var(--max); margin: 0 auto; padding: clamp(1rem, 3vw, 2rem) var(--gutter) clamp(3rem, 7vw, 6rem); }
