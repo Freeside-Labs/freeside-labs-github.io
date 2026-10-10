@@ -238,15 +238,29 @@
   const line = (a, b) => { const [x1, y1] = project(a), [x2, y2] = project(b); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); };
   const poly = (pts) => pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
 
-  // Lenses: one per slew, in card order. Flight software (05) has no honest picture, so it sits out.
+  // Lenses: one per slew, in card order.
   const LENSES = [
     { key: "guid", card: 0, label: "PLAN" },
     { key: "est", card: 1, label: "3σ" },
     { key: "ctrl", card: 2, label: "RW" },
     { key: "flex", card: 3, label: "f₁" },
+    { key: "fsw", card: 4, label: "UP" },
     { key: "mc", card: 5, label: "MC" },
   ];
   let lens = null, lensN = -1;
+  const setLens = (n) => {
+    lensN = n; lens = LENSES[n];
+    cards.forEach((c, i) => c.classList.toggle("on", i === lens.card));
+  };
+  // Flight software: before its slew the command load is uplinked from a ground station
+  // at the lower right, as packets of bits (filled = 1) streaming into the bus.
+  const UP = { packets: 8, every: 0.3, travel: 1.4, bits: 8 };
+  let uplink = null;
+  const startUplink = () => {
+    setLens(lensN + 1);
+    uplink = { t: 0, bytes: Array.from({ length: UP.packets }, () => Math.floor(Math.random() * 256)) };
+  };
+  const arrived = () => (uplink ? Math.max(0, Math.min(UP.packets, Math.floor((uplink.t - UP.travel) / UP.every) + 1)) : 0);
 
   // ---- state ----
   let q = [1, 0, 0, 0], qc = q, q0 = q, qT = q, slew = null, phase = "INIT", phaseT = 0, tEnd = 0, slewT = 0;
@@ -262,14 +276,13 @@
     eig = [scl(ax, 1.9), scl(ax, -1.9)];
   };
 
-  const newSlew = () => {
+  const newSlew = (advance = true) => {
     q0 = qc; qT = randomQ();
     const { axis, ang } = toAxisAngle(qmul(qconj(q0), qT));
     const dur = 2.2 + (ang * D) / 45; // ~45°/s average, it's a demo
     slew = { axis, ang, dur };
     phase = "SLEW"; phaseT = 0; slewT = 0;
-    lensN = (lensN + 1) % LENSES.length; lens = LENSES[lensN];
-    cards.forEach((c, i) => c.classList.toggle("on", i === lens.card));
+    if (advance) { setLens((lensN + 1) % LENSES.length); uplink = null; }
     planPath();
     // gyro scale factor before calibration: 2–3.5 % either sign
     est.sf = (Math.random() < 0.5 ? -1 : 1) * (0.02 + 0.015 * Math.random());
@@ -293,7 +306,14 @@
       if (s >= 1) { phase = "SETTLE"; phaseT = 0; tEnd = 0; qc = qT; }
     } else if (phase === "SETTLE") {
       if ((phaseT > 0.6 && amp() < 0.005) || phaseT > 5) { phase = "LOCK"; phaseT = 0; }
-    } else if (phase === "LOCK" && phaseT > 2.6) newSlew();
+    } else if (phase === "LOCK" && uplink && arrived() < UP.packets) {
+      uplink.t += dt;
+      if (arrived() === UP.packets) { phaseT = 2.2; } // hold briefly, then execute the load
+    } else if (phase === "LOCK" && phaseT > 2.6) {
+      if (LENSES[(lensN + 1) % LENSES.length].key === "fsw" && !uplink) { startUplink(); phaseT = 0; }
+      else if (uplink && !uplink.sent) { uplink.sent = true; newSlew(false); } // execute the uplinked load
+      else newSlew();
+    }
     if (phase === "SETTLE" || phase === "LOCK") tEnd += dt;
 
     // flex mode, sub-stepped: driven by the commanded angular acceleration in body axes
@@ -379,6 +399,24 @@
         i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
       }
       ctx.stroke();
+    } else if (L === "fsw" && uplink && arrived() < UP.packets) {
+      // ground station at the lower right; bits ride the link into the bus, 1 filled, 0 hollow
+      const [gx, gy] = [W - 18, H - 18], [bx, by] = project([0, 0, 0]);
+      const len = Math.hypot(bx - gx, by - gy), ux = (bx - gx) / len, uy = (by - gy) / len;
+      ctx.setLineDash([2, 4]); ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(bx, by); ctx.stroke(); ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(gx, gy, 7, Math.PI, 1.5 * Math.PI); ctx.moveTo(gx, gy); ctx.lineTo(gx + 5, gy + 5); ctx.stroke();
+      ctx.fillStyle = PHOS; ctx.strokeStyle = PHOS;
+      uplink.bytes.forEach((byte, i) => {
+        const f = (uplink.t - i * UP.every) / UP.travel;
+        if (f <= 0 || f >= 1) return;
+        for (let k = 0; k < UP.bits; k++) {
+          const d = f * len - k * 4.5;
+          if (d < 0 || d > len - 8) continue;
+          const x = gx + ux * d - 1.5, y = gy + uy * d - 1.5;
+          (byte >> k) & 1 ? ctx.fillRect(x, y, 3, 3) : ctx.strokeRect(x + 0.5, y + 0.5, 2, 2);
+        }
+      });
+      ctx.strokeStyle = DIM;
     } else if (L === "ctrl") {
       // four wheel speeds, ±4000 rpm full scale, in a small gauge at the lower left
       const X = 16, Y = 250, S = 30;
@@ -416,6 +454,7 @@
         L === "est" ? `${(est.s3 * D).toFixed(3)} ° ${est.st ? "ST+GYRO" : "GYRO"}` :
         L === "ctrl" ? wheelRpm(wb).map((w) => sgn(w / 1000, 1)).join(" ") + " krpm" :
         L === "flex" ? `${FLEX.f.toFixed(2)} Hz ζ ${FLEX.zeta.toFixed(2)}` :
+        L === "fsw" ? (arrived() < UP.packets ? `PKT ${arrived()}/${UP.packets}` : `${UP.packets}/${UP.packets} CRC OK · EXEC`) :
         `${runs.length} runs ±${(Math.max(...runs.map((r) => r.now || 0)) * D).toFixed(2)} °`;
     }
     const el = Math.floor((performance.now() - t0) / 1000);
