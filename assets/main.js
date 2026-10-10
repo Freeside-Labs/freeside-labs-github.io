@@ -248,14 +248,12 @@
     { key: "mc", card: 5, label: "MC" },
   ];
   let lens = null, lensN = -1;
-  // 60 runs land over the slew; requirement 0.05° radial, dispersion σ 0.012° per axis
-  const MC = { runs: 60, every: 0.08, req: 0.05, sigma: 0.012 };
-  const mcDone = () => Math.min(MC.runs, Math.floor(slewT / MC.every));
-  const mc3s = () => {
-    const n = mcDone(); let ss = 0;
-    for (let i = 0; i < n; i++) ss += runs[i][0] ** 2 + runs[i][1] ** 2;
-    return n ? 3 * Math.sqrt(ss / (2 * n)) : 0;
-  };
+  // Monte Carlo: two dispersed runs fly the same slew. Their errors grow mid-slew on opposite
+  // sides of the boresight and close out by the end, so all three arrive on the same target.
+  // Drawn as a superposition: the craft leaves bright, splits into three equal dim blurred
+  // copies, and collapses back to the one bright craft at the target.
+  let mcMix = 0;
+  const mcSpread = () => runs.reduce((m, r) => Math.max(m, r.q ? errAngle(q, r.q) : 0), 0) * D;
   const setLens = (n) => {
     lensN = n; lens = LENSES[n];
     cards.forEach((c, i) => c.classList.toggle("on", i === lens.card));
@@ -294,9 +292,8 @@
     planPath();
     // gyro scale factor before calibration: 2–3.5 % either sign
     est.sf = (Math.random() < 0.5 ? -1 : 1) * (0.02 + 0.015 * Math.random());
-    // Monte Carlo: final pointing error of each dispersed run, x and y about the boresight, in degrees
-    const gauss = () => Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
-    runs = Array.from({ length: MC.runs }, () => [gauss() * MC.sigma, gauss() * MC.sigma]);
+    const side = 2 * Math.PI * Math.random();
+    runs = [[side, 11], [side + Math.PI - 0.5, 17]].map(([a, deg]) => ({ axis: [Math.cos(a), Math.sin(a), 0], amp: deg / D, q: null, pts: [] }));
     wob = [unit(randomQ().slice(1)), unit(randomQ().slice(1))];
   };
 
@@ -310,7 +307,12 @@
       const th = slew.ang * (s - Math.sin(2 * Math.PI * s) / (2 * Math.PI));
       alpha = scl(slew.axis, slew.ang * 2 * Math.PI * Math.sin(2 * Math.PI * s) / (slew.dur * slew.dur));
       qc = qmul(q0, qaxis(slew.axis, th));
-      if (s >= 1) { phase = "SETTLE"; phaseT = 0; tEnd = 0; qc = qT; }
+      mcMix = lens.key === "mc" ? smooth(0, 0.15, s) * (1 - smooth(0.85, 1, s)) : 0;
+      if (lens.key === "mc") for (const r of runs) {
+        r.q = qmul(qc, qexp(scl(r.axis, r.amp * Math.sin(Math.PI * s))));
+        r.pts.push(project(rotate(r.q, [0, 0, BORE])));
+      }
+      if (s >= 1) { phase = "SETTLE"; phaseT = 0; tEnd = 0; qc = qT; mcMix = 0; for (const r of runs) { r.q = null; r.pts = []; } }
     } else if (phase === "SETTLE") {
       if ((phaseT > 0.6 && amp() < 0.005) || phaseT > 5) { phase = "LOCK"; phaseT = 0; }
     } else if (phase === "LOCK" && uplink && arrived() < UP.packets) {
@@ -382,16 +384,10 @@
       ctx.setLineDash([2, 3]); ctx.beginPath(); poly(plan); ctx.stroke(); ctx.setLineDash([]);
       ctx.beginPath(); line(...eig); ctx.stroke();
     } else if (L === "mc") {
-      // dispersion plot at the lower left: runs land one by one against the dashed requirement circle
-      const X = 54, Y = 244, B = 38, R = 32, n = mcDone();
-      ctx.strokeRect(X - B - 0.5, Y - B - 0.5, 2 * B + 1, 2 * B + 1);
-      ctx.beginPath(); ctx.moveTo(X - B, Y); ctx.lineTo(X + B, Y); ctx.moveTo(X, Y - B); ctx.lineTo(X, Y + B); ctx.stroke();
-      ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.arc(X, Y, R, 0, 2 * Math.PI); ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = PHOS;
-      for (let i = 0; i < n; i++) {
-        const [ex, ey] = runs[i], k = i === n - 1 ? 3 : 2;
-        ctx.fillRect(X + (ex / MC.req) * R - k / 2, Y - (ey / MC.req) * R - k / 2, k, k);
-      }
+      // each run's boresight trail, dotted, fading with the superposition
+      ctx.globalAlpha = 0.6 * mcMix; ctx.setLineDash([1, 3]); ctx.beginPath();
+      for (const r of runs) poly(r.pts);
+      ctx.stroke(); ctx.setLineDash([]);
     } else if (L === "flex") {
       ctx.beginPath();
       for (const [a, b] of wingEdges) line(rotate(q, a), rotate(q, b));
@@ -435,14 +431,22 @@
     }
     ctx.globalAlpha = 1;
 
-    // spacecraft: one path, stroked wide+faint then thin+bright for a cheap phosphor glow
+    // spacecraft: one path, stroked wide+faint then thin+bright for a cheap phosphor glow;
+    // in superposition every copy is dimmed and smeared with extra wide, faint passes
     ctx.strokeStyle = PHOS;
-    ctx.beginPath();
-    for (const [a, b] of edges) line(rotate(q, a), rotate(q, b));
-    for (const [a, b] of wingEdges) line(rotate(q, bend(a, eta)), rotate(q, bend(b, eta)));
-    line(rotate(q, boresight[0]), rotate(q, boresight[1]));
-    ctx.globalAlpha = 0.18; ctx.lineWidth = 5; ctx.stroke();
-    ctx.globalAlpha = 1; ctx.lineWidth = 1.4; ctx.stroke();
+    const craft = (qq, core, glow, blur) => {
+      ctx.beginPath();
+      for (const [a, b] of edges) line(rotate(qq, a), rotate(qq, b));
+      for (const [a, b] of wingEdges) line(rotate(qq, bend(a, eta)), rotate(qq, bend(b, eta)));
+      line(rotate(qq, boresight[0]), rotate(qq, boresight[1]));
+      if (blur > 0) { ctx.globalAlpha = 0.05 * blur; ctx.lineWidth = 9; ctx.stroke(); ctx.globalAlpha = 0.1 * blur; ctx.lineWidth = 4.5; ctx.stroke(); }
+      if (glow > 0) { ctx.globalAlpha = 0.18 * glow; ctx.lineWidth = 5; ctx.stroke(); }
+      ctx.globalAlpha = core; ctx.lineWidth = 1.4; ctx.stroke();
+    };
+    const m = L === "mc" ? mcMix : 0;
+    if (m > 0) for (const r of runs) if (r.q) craft(r.q, 0.4 * m, 0, m);
+    craft(q, 1 - 0.6 * m, 1 - m, m);
+    ctx.globalAlpha = 1;
 
     // readouts, throttled: text with glow is costly to repaint
     const now = performance.now();
@@ -463,7 +467,7 @@
         L === "ctrl" ? wheelRpm(wb).map((w) => sgn(w / 1000, 1)).join(" ") + " krpm" :
         L === "flex" ? `${FLEX.f.toFixed(2)} Hz ζ ${FLEX.zeta.toFixed(2)}` :
         L === "fsw" ? (arrived() < UP.packets ? `PKT ${arrived()}/${UP.packets}` : `${UP.packets}/${UP.packets} CRC OK · EXEC`) :
-        `${mcDone()}/${MC.runs} 3σ ${mc3s().toFixed(3)} °`;
+        `3 runs ±${mcSpread().toFixed(2)} °`;
     }
     const el = Math.floor((performance.now() - t0) / 1000);
     out.t.textContent = `${pad(Math.floor(el / 3600))}:${pad(Math.floor(el / 60) % 60)}:${pad(el % 60)}`;
