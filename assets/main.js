@@ -143,7 +143,8 @@
   const qnorm = (q) => { const n = Math.hypot(...q); return q.map((c) => c / n); };
   const qaxis = (axis, ang) => { const s = Math.sin(ang / 2); return [Math.cos(ang / 2), axis[0] * s, axis[1] * s, axis[2] * s]; };
   const rotate = (q, v) => qmul(qmul(q, [0, ...v]), qconj(q)).slice(1);
-  const errAngle = (a, b) => 2 * Math.acos(Math.min(1, Math.abs(qmul(qconj(a), b)[0])));
+  // rotation angle between two attitudes; atan2 keeps precision near zero where acos does not
+  const errAngle = (a, b) => { const d = qmul(qconj(a), b); return 2 * Math.atan2(Math.hypot(d[1], d[2], d[3]), Math.abs(d[0])); };
   const randomQ = () => {
     // Shoemake uniform random rotation
     const [u1, u2, u3] = [Math.random(), Math.random(), Math.random()];
@@ -213,28 +214,33 @@
     phase = "SLEW"; phaseT = 0;
   };
 
+  // After a slew the vehicle rings down about the target, then holds with a small wobble.
+  // Both terms start at zero angle and zero rate, so attitude and rate stay continuous.
+  const residual = (tp) => {
+    const a = 0.006 * Math.E * (tp / 0.3) * Math.exp(-tp / 0.3) * Math.sin(2 * Math.PI * 1.4 * tp);
+    const b = 4e-5 * (1 - Math.exp(-tp)) * Math.sin(2 * Math.PI * 0.7 * tp);
+    return qmul(qaxis(settle[0], a), qaxis(settle[1], b));
+  };
+  const unit = (v) => { const n = Math.hypot(...v); return v.map((c) => c / n); };
+
   let wDeg = 0;
   const step = (dt) => {
+    const prev = q;
     phaseT += dt;
     if (phase === "INIT" && phaseT > 0.8) newSlew();
     else if (phase === "SLEW") {
       const s = Math.min(1, phaseT / slew.dur);
       const th = slew.ang * (s - Math.sin(2 * Math.PI * s) / (2 * Math.PI));
-      wDeg = (slew.ang * (1 - Math.cos(2 * Math.PI * s)) / slew.dur) * 180 / Math.PI;
       q = qmul(q0, qaxis(slew.axis, th));
-      if (s >= 1) { phase = "SETTLE"; phaseT = 0; settle = randomQ().slice(1); }
-    } else if (phase === "SETTLE") {
-      // decaying residual from flex modes / controller transient
-      const a = 0.006 * Math.exp(-phaseT / 0.45) * Math.sin(2 * Math.PI * 1.4 * phaseT);
-      const n = Math.hypot(...settle);
-      q = qmul(qT, qaxis(settle.map((c) => c / n), a));
-      wDeg = Math.abs(0.006 * Math.exp(-phaseT / 0.45) * 2 * Math.PI * 1.4) * 180 / Math.PI;
-      if (phaseT > 1.8) { phase = "LOCK"; phaseT = 0; }
-    } else if (phase === "LOCK") {
-      q = qnorm(qmul(qT, qaxis([0, 0, 1], (Math.random() - 0.5) * 6e-5)));
-      wDeg = Math.random() * 2e-3;
-      if (phaseT > 2.6) newSlew();
+      if (s >= 1) { phase = "SETTLE"; phaseT = 0; settle = [unit(randomQ().slice(1)), unit(randomQ().slice(1))]; }
+    } else if (phase === "SETTLE" || phase === "LOCK") {
+      const tp = phase === "SETTLE" ? phaseT : phaseT + 1.8;
+      q = qmul(qT, residual(tp));
+      if (phase === "SETTLE" && phaseT > 1.8) { phase = "LOCK"; phaseT = 0; }
+      else if (phase === "LOCK" && phaseT > 2.6) newSlew();
     }
+    // |ω| is measured from the attitude actually drawn, frame to frame
+    if (dt > 0) wDeg = (errAngle(prev, q) / dt) * 180 / Math.PI;
   };
 
   let lastText = 0, lastPhase = "";
@@ -275,7 +281,7 @@
     const err = errAngle(q, qT) * 180 / Math.PI;
     out.mode.textContent = phase;
     out.mode.classList.toggle("lock", phase === "LOCK");
-    out.q.textContent = q.map(fmt).join(" ");
+    out.q.textContent = [q[1], q[2], q[3], q[0]].map(fmt).join(" "); // scalar last: x y z w
     out.w.textContent = `${wDeg.toFixed(3)} °/s`;
     out.err.textContent = `${err.toFixed(3)} °`;
     const el = Math.floor((performance.now() - t0) / 1000);
