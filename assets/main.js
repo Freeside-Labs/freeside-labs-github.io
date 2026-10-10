@@ -248,6 +248,14 @@
     { key: "mc", card: 5, label: "MC" },
   ];
   let lens = null, lensN = -1;
+  // 60 runs land over the slew; requirement 0.05° radial, dispersion σ 0.012° per axis
+  const MC = { runs: 60, every: 0.08, req: 0.05, sigma: 0.012 };
+  const mcDone = () => Math.min(MC.runs, Math.floor(slewT / MC.every));
+  const mc3s = () => {
+    const n = mcDone(); let ss = 0;
+    for (let i = 0; i < n; i++) ss += runs[i][0] ** 2 + runs[i][1] ** 2;
+    return n ? 3 * Math.sqrt(ss / (2 * n)) : 0;
+  };
   const setLens = (n) => {
     lensN = n; lens = LENSES[n];
     cards.forEach((c, i) => c.classList.toggle("on", i === lens.card));
@@ -286,10 +294,9 @@
     planPath();
     // gyro scale factor before calibration: 2–3.5 % either sign
     est.sf = (Math.random() < 0.5 ? -1 : 1) * (0.02 + 0.015 * Math.random());
-    runs = Array.from({ length: 12 }, () => ({
-      e0: scl(unit(randomQ().slice(1)), (3 + 9 * Math.random()) / D),
-      tau: 0.8 + 0.8 * Math.random(), pts: [],
-    }));
+    // Monte Carlo: final pointing error of each dispersed run, x and y about the boresight, in degrees
+    const gauss = () => Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
+    runs = Array.from({ length: MC.runs }, () => [gauss() * MC.sigma, gauss() * MC.sigma]);
     wob = [unit(randomQ().slice(1)), unit(randomQ().slice(1))];
   };
 
@@ -343,12 +350,6 @@
       est.e = add(est.e, scl(wb, est.sf * dt)); est.s3 += 0.06 * Math.hypot(...wb) * dt;
     }
 
-    // Monte Carlo: dispersed starts converge on the same profile
-    if (lens && lens.key === "mc" && (phase !== "LOCK" || phaseT < 0.4)) for (const r of runs) {
-      const e = scl(r.e0, Math.exp(-slewT / r.tau));
-      r.now = Math.hypot(...e);
-      r.pts.push(project(rotate(qmul(q, qexp(e)), [0, 0, BORE])));
-    }
   };
 
   let lastText = 0, lastPhase = "";
@@ -381,9 +382,16 @@
       ctx.setLineDash([2, 3]); ctx.beginPath(); poly(plan); ctx.stroke(); ctx.setLineDash([]);
       ctx.beginPath(); line(...eig); ctx.stroke();
     } else if (L === "mc") {
-      ctx.beginPath();
-      for (const r of runs) poly(r.pts);
-      ctx.stroke();
+      // dispersion plot at the lower left: runs land one by one against the dashed requirement circle
+      const X = 54, Y = 244, B = 38, R = 32, n = mcDone();
+      ctx.strokeRect(X - B - 0.5, Y - B - 0.5, 2 * B + 1, 2 * B + 1);
+      ctx.beginPath(); ctx.moveTo(X - B, Y); ctx.lineTo(X + B, Y); ctx.moveTo(X, Y - B); ctx.lineTo(X, Y + B); ctx.stroke();
+      ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.arc(X, Y, R, 0, 2 * Math.PI); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = PHOS;
+      for (let i = 0; i < n; i++) {
+        const [ex, ey] = runs[i], k = i === n - 1 ? 3 : 2;
+        ctx.fillRect(X + (ex / MC.req) * R - k / 2, Y - (ey / MC.req) * R - k / 2, k, k);
+      }
     } else if (L === "flex") {
       ctx.beginPath();
       for (const [a, b] of wingEdges) line(rotate(q, a), rotate(q, b));
@@ -455,7 +463,7 @@
         L === "ctrl" ? wheelRpm(wb).map((w) => sgn(w / 1000, 1)).join(" ") + " krpm" :
         L === "flex" ? `${FLEX.f.toFixed(2)} Hz ζ ${FLEX.zeta.toFixed(2)}` :
         L === "fsw" ? (arrived() < UP.packets ? `PKT ${arrived()}/${UP.packets}` : `${UP.packets}/${UP.packets} CRC OK · EXEC`) :
-        `${runs.length} runs ±${(Math.max(...runs.map((r) => r.now || 0)) * D).toFixed(2)} °`;
+        `${mcDone()}/${MC.runs} 3σ ${mc3s().toFixed(3)} °`;
     }
     const el = Math.floor((performance.now() - t0) / 1000);
     out.t.textContent = `${pad(Math.floor(el / 3600))}:${pad(Math.floor(el / 60) % 60)}:${pad(el % 60)}`;
