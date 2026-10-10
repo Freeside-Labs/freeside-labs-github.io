@@ -159,6 +159,8 @@
   };
 
   // ---- console ----
+  // A small spacecraft (1 unit = 1 m) slews between random targets. Each slew shows one
+  // capability card's view of the same motion; everything drawn and printed comes from one state.
   const canvas = document.getElementById("att");
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
@@ -167,31 +169,64 @@
   canvas.width = W * dpr; canvas.height = H * dpr;
   ctx.scale(dpr, dpr);
 
-  const out = {
-    mode: document.getElementById("t-mode"),
-    q: document.getElementById("t-q"),
-    w: document.getElementById("t-w"),
-    err: document.getElementById("t-err"),
-    t: document.getElementById("t-t"),
-  };
+  const out = {};
+  for (const k of ["mode", "q", "w", "err", "tip", "lk", "lv", "t"]) out[k] = document.getElementById("t-" + k);
+  const cards = document.querySelectorAll(".caps li");
   const css = getComputedStyle(document.querySelector(".console .crt"));
   const PHOS = css.getPropertyValue("--c").trim() || "#7cf3a2";
   const DIM = css.getPropertyValue("--cd").trim() || "#3f9563";
 
-  // Spacecraft wireframe in body axes: bus cube, two solar wings on ±y, boresight on +z.
+  const add = (a, b) => a.map((c, i) => c + b[i]);
+  const scl = (a, k) => a.map((c) => c * k);
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const unit = (v) => scl(v, 1 / Math.hypot(...v));
+  const qexp = (r) => { const n = Math.hypot(...r); return n < 1e-12 ? [1, 0, 0, 0] : qaxis(scl(r, 1 / n), n); };
+  const D = 180 / Math.PI;
+
+  // Spacecraft wireframe in body axes: bus, two solar wings on ±y, boresight on +z.
+  // Wing points carry their span station so the flex mode can bend them.
   const edges = [];
-  const box = (sx, sy, sz, cx = 0, cy = 0, cz = 0) => {
+  const box = (sx, sy, sz) => {
     const v = [];
-    for (const x of [-sx, sx]) for (const y of [-sy, sy]) for (const z of [-sz, sz]) v.push([x + cx, y + cy, z + cz]);
+    for (const x of [-sx, sx]) for (const y of [-sy, sy]) for (const z of [-sz, sz]) v.push([x, y, z]);
     [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]]
       .forEach(([a, b]) => edges.push([v[a], v[b]]));
   };
   box(0.45, 0.45, 0.55);
-  box(0.32, 0.6, 0.02, 0, 1.1, 0);
-  box(0.32, 0.6, 0.02, 0, -1.1, 0);
-  edges.push([[0, 0.45, 0], [0, 0.5, 0]], [[0, -0.45, 0], [0, -0.5, 0]]);
-  for (const s of [1, -1]) for (const y of [0.8, 1.1, 1.4]) edges.push([[-0.32, s * y, 0], [0.32, s * y, 0]]);
-  const boresight = [[0, 0, 0.55], [0, 0, 1.6]];
+  const ROOT = 0.5, SPAN = 1.2;
+  const wingEdges = [];
+  for (const s of [1, -1]) {
+    const seg = (a, b) => wingEdges.push([a, b]);
+    for (const z of [0.02, -0.02]) {
+      for (const x of [0.32, -0.32]) for (let i = 0; i < 8; i++) seg([x, s * (ROOT + SPAN * i / 8), z], [x, s * (ROOT + SPAN * (i + 1) / 8), z]);
+      for (const y of [ROOT, ROOT + SPAN]) seg([-0.32, s * y, z], [0.32, s * y, z]);
+    }
+    for (const x of [0.32, -0.32]) for (const y of [ROOT, ROOT + SPAN]) seg([x, s * y, 0.02], [x, s * y, -0.02]);
+    for (const y of [0.8, 1.1, 1.4]) seg([-0.32, s * y, 0], [0.32, s * y, 0]);
+    edges.push([[0, s * 0.45, 0], [0, s * 0.5, 0]]);
+  }
+  const BORE = 1.6;
+  const boresight = [[0, 0, 0.55], [0, 0, BORE]];
+
+  // First wing bending mode, antisymmetric: the tips lag the bus's angular acceleration.
+  // eta = [x, z] tip deflection in metres; shape is the uniform-load cantilever curve.
+  const FLEX = { f: 0.4, zeta: 0.2, gain: 1.1, kappa: 0.05 };
+  const wn = 2 * Math.PI * FLEX.f;
+  // ringing amplitude of the tip, independent of where in the cycle it is
+  const amp = () => Math.hypot(eta[0], eta[1], etaD[0] / wn, etaD[1] / wn);
+  const bend = ([x, y, z], eta) => {
+    const u = Math.max(0, (Math.abs(y) - ROOT) / SPAN), phi = (u ** 4 - 4 * u ** 3 + 6 * u * u) / 3, s = Math.sign(y) * phi;
+    return [x + s * eta[0], y, z + s * eta[1]];
+  };
+
+  // Four reaction wheels in a pyramid; they absorb the body's momentum, plus a null-space bias.
+  const J = [60, 25, 55], IW = 0.25, BIAS = 1200, RPM = 60 / (2 * Math.PI);
+  const ce = Math.cos(0.6155), se = Math.sin(0.6155);
+  const WA = [45, 135, 225, 315].map((p) => [ce * Math.cos(p / D), ce * Math.sin(p / D), se]);
+  const wheelRpm = (w) => {
+    const h = [-J[0] * w[0] / (2 * ce * ce), -J[1] * w[1] / (2 * ce * ce), -J[2] * w[2] / (4 * se * se)];
+    return WA.map((a, i) => (a[0] * h[0] + a[1] * h[1] + a[2] * h[2]) / IW * RPM + (i % 2 ? -BIAS : BIAS));
+  };
 
   // Fixed camera: tilt the inertial frame so the view isn't face-on.
   const cam = qmul(qaxis([1, 0, 0], -1.05), qaxis([0, 0, 1], 0.6));
@@ -201,53 +236,108 @@
     return [W / 2 + p[0] * f * 0.95, H / 2 - p[2] * f * 0.95];
   };
   const line = (a, b) => { const [x1, y1] = project(a), [x2, y2] = project(b); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); };
+  const poly = (pts) => pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
 
-  // ---- guidance: rest-to-rest eigenaxis slews with a cycloidal angle profile ----
-  let q = [1, 0, 0, 0], q0 = q, qT = q, slew = null, phase = "INIT", phaseT = 0, settle = null;
+  // Lenses: one per slew, in card order. Flight software (05) has no honest picture, so it sits out.
+  const LENSES = [
+    { key: "guid", card: 0, label: "PLAN" },
+    { key: "est", card: 1, label: "3σ" },
+    { key: "ctrl", card: 2, label: "RW" },
+    { key: "flex", card: 3, label: "f₁" },
+    { key: "mc", card: 5, label: "MC" },
+  ];
+  let lens = null, lensN = -1;
+
+  // ---- state ----
+  let q = [1, 0, 0, 0], qc = q, q0 = q, qT = q, slew = null, phase = "INIT", phaseT = 0, tEnd = 0, slewT = 0;
+  let eta = [0, 0], etaD = [0, 0], wb = [0, 0, 0], wDeg = 0;
+  let est = { e: [0, 0, 0], s3: 0.003 / D, sf: 0, st: true };
+  let plan = [], eig = null, runs = [], wob = [[1, 0, 0], [0, 1, 0]];
   const t0 = performance.now();
 
+  const planPath = () => {
+    plan = [];
+    for (let k = 0; k <= 48; k++) plan.push(project(rotate(qmul(q0, qaxis(slew.axis, slew.ang * k / 48)), [0, 0, BORE])));
+    const ax = rotate(q0, slew.axis);
+    eig = [scl(ax, 1.9), scl(ax, -1.9)];
+  };
+
   const newSlew = () => {
-    q0 = q; qT = randomQ();
+    q0 = qc; qT = randomQ();
     const { axis, ang } = toAxisAngle(qmul(qconj(q0), qT));
-    const dur = 2.2 + (ang * 180 / Math.PI) / 45; // ~45°/s average, it's a demo
+    const dur = 2.2 + (ang * D) / 45; // ~45°/s average, it's a demo
     slew = { axis, ang, dur };
-    phase = "SLEW"; phaseT = 0;
+    phase = "SLEW"; phaseT = 0; slewT = 0;
+    lensN = (lensN + 1) % LENSES.length; lens = LENSES[lensN];
+    cards.forEach((c, i) => c.classList.toggle("on", i === lens.card));
+    planPath();
+    // gyro scale factor before calibration: 2–3.5 % either sign
+    est.sf = (Math.random() < 0.5 ? -1 : 1) * (0.02 + 0.015 * Math.random());
+    runs = Array.from({ length: 12 }, () => ({
+      e0: scl(unit(randomQ().slice(1)), (3 + 9 * Math.random()) / D),
+      tau: 0.8 + 0.8 * Math.random(), pts: [],
+    }));
+    wob = [unit(randomQ().slice(1)), unit(randomQ().slice(1))];
   };
 
-  // After a slew the vehicle rings down about the target, then holds with a small wobble.
-  // Both terms start at zero angle and zero rate, so attitude and rate stay continuous.
-  const residual = (tp) => {
-    const a = 0.006 * Math.E * (tp / 0.3) * Math.exp(-tp / 0.3) * Math.sin(2 * Math.PI * 1.4 * tp);
-    const b = 4e-5 * (1 - Math.exp(-tp)) * Math.sin(2 * Math.PI * 0.7 * tp);
-    return qmul(qaxis(settle[0], a), qaxis(settle[1], b));
-  };
-  const unit = (v) => { const n = Math.hypot(...v); return v.map((c) => c / n); };
-
-  let wDeg = 0;
   const step = (dt) => {
     const prev = q;
-    phaseT += dt;
+    phaseT += dt; slewT += dt;
+    let alpha = [0, 0, 0];
     if (phase === "INIT" && phaseT > 0.8) newSlew();
     else if (phase === "SLEW") {
       const s = Math.min(1, phaseT / slew.dur);
       const th = slew.ang * (s - Math.sin(2 * Math.PI * s) / (2 * Math.PI));
-      q = qmul(q0, qaxis(slew.axis, th));
-      if (s >= 1) { phase = "SETTLE"; phaseT = 0; settle = [unit(randomQ().slice(1)), unit(randomQ().slice(1))]; }
-    } else if (phase === "SETTLE" || phase === "LOCK") {
-      const tp = phase === "SETTLE" ? phaseT : phaseT + 1.8;
-      q = qmul(qT, residual(tp));
-      if (phase === "SETTLE" && phaseT > 1.8) { phase = "LOCK"; phaseT = 0; }
-      else if (phase === "LOCK" && phaseT > 2.6) newSlew();
+      alpha = scl(slew.axis, slew.ang * 2 * Math.PI * Math.sin(2 * Math.PI * s) / (slew.dur * slew.dur));
+      qc = qmul(q0, qaxis(slew.axis, th));
+      if (s >= 1) { phase = "SETTLE"; phaseT = 0; tEnd = 0; qc = qT; }
+    } else if (phase === "SETTLE") {
+      if ((phaseT > 0.6 && amp() < 0.005) || phaseT > 5) { phase = "LOCK"; phaseT = 0; }
+    } else if (phase === "LOCK" && phaseT > 2.6) newSlew();
+    if (phase === "SETTLE" || phase === "LOCK") tEnd += dt;
+
+    // flex mode, sub-stepped: driven by the commanded angular acceleration in body axes
+    const n = Math.ceil(dt / 0.004), h = dt / n;
+    const force = [FLEX.gain * alpha[2], -FLEX.gain * alpha[0]];
+    for (let k = 0; k < n; k++) for (const i of [0, 1]) {
+      etaD[i] += h * (force[i] - 2 * FLEX.zeta * wn * etaD[i] - wn * wn * eta[i]);
+      eta[i] += h * etaD[i];
     }
-    // |ω| is measured from the attitude actually drawn, frame to frame
-    if (dt > 0) wDeg = (errAngle(prev, q) / dt) * 180 / Math.PI;
+    // the bus reacts against the bending wings, and holds with a small wobble once settled
+    const b = 4e-5 * (1 - Math.exp(-tEnd)) * Math.sin(2 * Math.PI * 0.7 * tEnd);
+    q = qmul(qmul(qc, qexp([-FLEX.kappa * eta[1], 0, FLEX.kappa * eta[0]])), qaxis(wob[0], b));
+
+    // body rate, measured from the attitude actually drawn
+    if (dt > 0) {
+      const d = qmul(qconj(prev), q), ang = errAngle(prev, q), v = d.slice(1), nv = Math.hypot(...v);
+      wb = nv > 1e-15 ? scl(v, (Math.sign(d[0]) || 1) * ang / nv / dt) : [0, 0, 0];
+      wDeg = ang / dt * D;
+    }
+
+    // estimator: the star tracker drops out above 1 °/s; the gyro then integrates its scale-factor error
+    est.st = wDeg < 1;
+    if (est.st) {
+      const k = Math.exp(-dt / 0.25);
+      est.e = scl(est.e, k); est.s3 = 0.003 / D + (est.s3 - 0.003 / D) * k;
+    } else {
+      est.e = add(est.e, scl(wb, est.sf * dt)); est.s3 += 0.06 * Math.hypot(...wb) * dt;
+    }
+
+    // Monte Carlo: dispersed starts converge on the same profile
+    if (lens && lens.key === "mc" && (phase !== "LOCK" || phaseT < 0.4)) for (const r of runs) {
+      const e = scl(r.e0, Math.exp(-slewT / r.tau));
+      r.now = Math.hypot(...e);
+      r.pts.push(project(rotate(qmul(q, qexp(e)), [0, 0, BORE])));
+    }
   };
 
   let lastText = 0, lastPhase = "";
   const fmt = (x) => (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(4);
+  const sgn = (x, d) => (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(d);
   const render = () => {
     ctx.clearRect(0, 0, W, H);
     ctx.lineWidth = 1;
+    const L = lens && lens.key;
 
     // inertial reference ring + axes
     ctx.strokeStyle = DIM;
@@ -264,12 +354,46 @@
     ctx.setLineDash([4, 4]);
     ctx.beginPath(); line(rotate(qT, boresight[0]), rotate(qT, boresight[1]).map((c) => c * 1.15)); ctx.stroke();
     ctx.setLineDash([]);
+
+    // lens overlays, all in the dim phosphor so the spacecraft stays the brightest thing
+    ctx.globalAlpha = 0.9;
+    if (L === "guid" && plan.length) {
+      ctx.setLineDash([2, 3]); ctx.beginPath(); poly(plan); ctx.stroke(); ctx.setLineDash([]);
+      ctx.beginPath(); line(...eig); ctx.stroke();
+    } else if (L === "mc") {
+      ctx.beginPath();
+      for (const r of runs) poly(r.pts);
+      ctx.stroke();
+    } else if (L === "flex") {
+      ctx.beginPath();
+      for (const [a, b] of wingEdges) line(rotate(q, a), rotate(q, b));
+      ctx.stroke();
+    } else if (L === "est") {
+      const qe = qmul(q, qexp(est.e)), dir = rotate(qe, [0, 0, 1]);
+      const u = unit(cross(dir, Math.abs(dir[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0])), v = cross(dir, u);
+      // drawn out past the real boresight, like the target line, so the cone reads at this size
+      const c = scl(dir, 2.4), r = 2.4 * Math.tan(est.s3);
+      ctx.beginPath(); line(scl(dir, 0.55), c);
+      for (let i = 0; i <= 32; i++) {
+        const a = (i / 32) * 2 * Math.PI, [x, y] = project(add(c, add(scl(u, r * Math.cos(a)), scl(v, r * Math.sin(a)))));
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.stroke();
+    } else if (L === "ctrl") {
+      // four wheel speeds, ±4000 rpm full scale, in a small gauge at the lower left
+      const X = 16, Y = 250, S = 30;
+      ctx.strokeRect(X - 0.5, Y - S - 0.5, 50, 2 * S + 1);
+      ctx.beginPath(); ctx.moveTo(X, Y); ctx.lineTo(X + 50, Y); ctx.stroke();
+      ctx.fillStyle = PHOS; ctx.globalAlpha = 0.8;
+      wheelRpm(wb).forEach((w, i) => { const hgt = Math.max(-S, Math.min(S, (w / 4000) * S)); ctx.fillRect(X + 5 + i * 11, Y - Math.max(0, hgt), 7, Math.abs(hgt)); });
+    }
     ctx.globalAlpha = 1;
 
     // spacecraft: one path, stroked wide+faint then thin+bright for a cheap phosphor glow
     ctx.strokeStyle = PHOS;
     ctx.beginPath();
     for (const [a, b] of edges) line(rotate(q, a), rotate(q, b));
+    for (const [a, b] of wingEdges) line(rotate(q, bend(a, eta)), rotate(q, bend(b, eta)));
     line(rotate(q, boresight[0]), rotate(q, boresight[1]));
     ctx.globalAlpha = 0.18; ctx.lineWidth = 5; ctx.stroke();
     ctx.globalAlpha = 1; ctx.lineWidth = 1.4; ctx.stroke();
@@ -278,19 +402,33 @@
     const now = performance.now();
     if (now - lastText < 100 && phase === lastPhase) return;
     lastText = now; lastPhase = phase;
-    const err = errAngle(q, qT) * 180 / Math.PI;
+    const err = errAngle(q, qT) * D;
     out.mode.textContent = phase;
     out.mode.classList.toggle("lock", phase === "LOCK");
     out.q.textContent = [q[1], q[2], q[3], q[0]].map(fmt).join(" "); // scalar last: x y z w
     out.w.textContent = `${wDeg.toFixed(3)} °/s`;
     out.err.textContent = `${err.toFixed(3)} °`;
+    out.tip.textContent = `${(Math.hypot(...eta) * 1000).toFixed(1)} mm`;
+    if (lens) {
+      out.lk.textContent = lens.label;
+      out.lv.textContent =
+        L === "guid" ? `${(slew.ang * D).toFixed(1)} ° in ${slew.dur.toFixed(1)} s` :
+        L === "est" ? `${(est.s3 * D).toFixed(3)} ° ${est.st ? "ST+GYRO" : "GYRO"}` :
+        L === "ctrl" ? wheelRpm(wb).map((w) => sgn(w / 1000, 1)).join(" ") + " krpm" :
+        L === "flex" ? `${FLEX.f.toFixed(2)} Hz ζ ${FLEX.zeta.toFixed(2)}` :
+        `${runs.length} runs ±${(Math.max(...runs.map((r) => r.now || 0)) * D).toFixed(2)} °`;
+    }
     const el = Math.floor((performance.now() - t0) / 1000);
     out.t.textContent = `${pad(Math.floor(el / 3600))}:${pad(Math.floor(el / 60) % 60)}:${pad(el % 60)}`;
   };
 
   if (reduceMotion) {
-    // one still frame, held on target
-    qT = q = qnorm([0.82, 0.31, -0.28, 0.39]);
+    // one still frame, held on target, with the guidance plan that got it there
+    qT = qc = q = qnorm([0.82, 0.31, -0.28, 0.39]);
+    const { axis, ang } = toAxisAngle(qT);
+    slew = { axis, ang, dur: 2.2 + (ang * D) / 45 };
+    lens = LENSES[0]; cards[0] && cards[0].classList.add("on");
+    planPath();
     phase = "LOCK";
     render();
     return;
