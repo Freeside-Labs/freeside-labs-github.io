@@ -210,7 +210,8 @@
 
   // First wing bending mode, antisymmetric: the tips lag the bus's angular acceleration.
   // eta = [x, z] tip deflection in metres; shape is the uniform-load cantilever curve.
-  const FLEX = { f: 0.4, zeta: 0.2, gain: 1.1, kappa: 0.05 };
+  // the f₁ lens draws the deformation scaled up, as on an FE mode-shape plot; TIP stays true
+  const FLEX = { f: 0.4, zeta: 0.2, gain: 1.1, kappa: 0.05, def: 3 };
   const wn = 2 * Math.PI * FLEX.f;
   // ringing amplitude of the tip, independent of where in the cycle it is
   const amp = () => Math.hypot(eta[0], eta[1], etaD[0] / wn, etaD[1] / wn);
@@ -283,9 +284,20 @@
   };
 
   const newSlew = (advance = true) => {
-    q0 = qc; qT = randomQ();
-    const { axis, ang } = toAxisAngle(qmul(qconj(q0), qT));
-    const dur = 2.2 + (ang * D) / 45; // ~45°/s average, it's a demo
+    q0 = qc;
+    const flexNext = advance && LENSES[(lensN + 1) % LENSES.length].key === "flex";
+    let axis, ang, best = -1;
+    // the f₁ lens gets a big slew across the wings (that is what bends them), ending where
+    // the bend lies side-on to the camera rather than toward it
+    for (let k = 0; k < (flexNext ? 60 : 1); k++) {
+      const qq = randomQ(), aa = toAxisAngle(qmul(qconj(q0), qq));
+      const d = scl(unit([aa.axis[2], 0, -aa.axis[0]]), 0.2), tip = [0, ROOT + SPAN, 0];
+      const [x1, y1] = project(rotate(qq, tip)), [x2, y2] = project(rotate(qq, add(tip, d)));
+      const score = Math.hypot(x2 - x1, y2 - y1) * Math.hypot(aa.axis[0], aa.axis[2]) * Math.min(1, aa.ang / (90 / D));
+      if (score > best) { best = score; qT = qq; ({ axis, ang } = aa); }
+    }
+    // ~45°/s average, it's a demo; the f₁ slew runs a little hotter so the arrays ring after it
+    const dur = (2.2 + (ang * D) / 45) * (flexNext ? 0.85 : 1);
     slew = { axis, ang, dur };
     phase = "SLEW"; phaseT = 0; slewT = 0;
     if (advance) { setLens((lensN + 1) % LENSES.length); uplink = null; }
@@ -315,7 +327,7 @@
       if (lens.key === "mc") [q, ...runs.map((r) => r.q)].forEach((qq, i) => { mcHist[i].push(qq); if (mcHist[i].length > 14) mcHist[i].shift(); });
       if (s >= 1) { phase = "SETTLE"; phaseT = 0; tEnd = 0; qc = qT; mcMix = 0; for (const r of runs) { r.q = null; r.pts = []; } mcHist = [[], [], []]; }
     } else if (phase === "SETTLE") {
-      if ((phaseT > 0.6 && amp() < 0.005) || phaseT > 5) { phase = "LOCK"; phaseT = 0; }
+      if ((phaseT > 0.6 && amp() < 0.005) || phaseT > (lens && lens.key === "flex" ? 7 : 5)) { phase = "LOCK"; phaseT = 0; }
     } else if (phase === "LOCK" && uplink && arrived() < UP.packets) {
       uplink.t += dt;
       if (arrived() === UP.packets) { phaseT = 2.2; } // hold briefly, then execute the load
@@ -437,7 +449,8 @@
     const craft = (qq) => {
       ctx.beginPath();
       for (const [a, b] of edges) line(rotate(qq, a), rotate(qq, b));
-      for (const [a, b] of wingEdges) line(rotate(qq, bend(a, eta)), rotate(qq, bend(b, eta)));
+      const e = L === "flex" ? scl(eta, FLEX.def) : eta;
+      for (const [a, b] of wingEdges) line(rotate(qq, bend(a, e)), rotate(qq, bend(b, e)));
       line(rotate(qq, boresight[0]), rotate(qq, boresight[1]));
     };
     const m = L === "mc" ? mcMix : 0;
@@ -490,7 +503,7 @@
         L === "guid" ? `${(slew.ang * D).toFixed(1)} ° in ${slew.dur.toFixed(1)} s` :
         L === "est" ? `${(est.s3 * D).toFixed(3)} ° ${est.st ? "ST+GYRO" : "GYRO"}` :
         L === "ctrl" ? wheelRpm(wb).map((w) => sgn(w / 1000, 1)).join(" ") + " krpm" :
-        L === "flex" ? `${FLEX.f.toFixed(2)} Hz ζ ${FLEX.zeta.toFixed(2)}` :
+        L === "flex" ? `${FLEX.f.toFixed(2)} Hz ζ ${FLEX.zeta.toFixed(2)} ×${FLEX.def}` :
         L === "fsw" ? (arrived() < UP.packets ? `PKT ${arrived()}/${UP.packets}` : `${UP.packets}/${UP.packets} CRC OK · EXEC`) :
         `3 runs ±${mcSpread().toFixed(2)} °`;
     }
