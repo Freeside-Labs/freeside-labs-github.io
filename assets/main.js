@@ -252,7 +252,7 @@
   // sides of the boresight and close out by the end, so all three arrive on the same target.
   // Drawn as a superposition: the craft leaves bright, splits into three equal dim blurred
   // copies, and collapses back to the one bright craft at the target.
-  let mcMix = 0;
+  let mcMix = 0, mcHist = [[], [], []], jit = [], jitT = -1;
   const mcSpread = () => runs.reduce((m, r) => Math.max(m, r.q ? errAngle(q, r.q) : 0), 0) * D;
   const setLens = (n) => {
     lensN = n; lens = LENSES[n];
@@ -312,7 +312,8 @@
         r.q = qmul(qc, qexp(scl(r.axis, r.amp * Math.sin(Math.PI * s))));
         r.pts.push(project(rotate(r.q, [0, 0, BORE])));
       }
-      if (s >= 1) { phase = "SETTLE"; phaseT = 0; tEnd = 0; qc = qT; mcMix = 0; for (const r of runs) { r.q = null; r.pts = []; } }
+      if (lens.key === "mc") [q, ...runs.map((r) => r.q)].forEach((qq, i) => { mcHist[i].push(qq); if (mcHist[i].length > 14) mcHist[i].shift(); });
+      if (s >= 1) { phase = "SETTLE"; phaseT = 0; tEnd = 0; qc = qT; mcMix = 0; for (const r of runs) { r.q = null; r.pts = []; } mcHist = [[], [], []]; }
     } else if (phase === "SETTLE") {
       if ((phaseT > 0.6 && amp() < 0.005) || phaseT > 5) { phase = "LOCK"; phaseT = 0; }
     } else if (phase === "LOCK" && uplink && arrived() < UP.packets) {
@@ -431,21 +432,45 @@
     }
     ctx.globalAlpha = 1;
 
-    // spacecraft: one path, stroked wide+faint then thin+bright for a cheap phosphor glow;
-    // in superposition every copy is dimmed and smeared with extra wide, faint passes
+    // spacecraft: one path, stroked wide+faint then thin+bright for a cheap phosphor glow
     ctx.strokeStyle = PHOS;
-    const craft = (qq, core, glow, blur) => {
+    const craft = (qq) => {
       ctx.beginPath();
       for (const [a, b] of edges) line(rotate(qq, a), rotate(qq, b));
       for (const [a, b] of wingEdges) line(rotate(qq, bend(a, eta)), rotate(qq, bend(b, eta)));
       line(rotate(qq, boresight[0]), rotate(qq, boresight[1]));
-      if (blur > 0) { ctx.globalAlpha = 0.05 * blur; ctx.lineWidth = 9; ctx.stroke(); ctx.globalAlpha = 0.1 * blur; ctx.lineWidth = 4.5; ctx.stroke(); }
-      if (glow > 0) { ctx.globalAlpha = 0.18 * glow; ctx.lineWidth = 5; ctx.stroke(); }
-      ctx.globalAlpha = core; ctx.lineWidth = 1.4; ctx.stroke();
     };
     const m = L === "mc" ? mcMix : 0;
-    if (m > 0) for (const r of runs) if (r.q) craft(r.q, 0.4 * m, 0, m);
-    craft(q, 1 - 0.6 * m, 1 - m, m);
+    if (m === 0) {
+      craft(q);
+      ctx.globalAlpha = 0.18; ctx.lineWidth = 5; ctx.stroke();
+      ctx.globalAlpha = 1; ctx.lineWidth = 1.4; ctx.stroke();
+    } else {
+      // superposition: every copy stutters (new random shift, tilt and flicker ~16 times a
+      // second) and trails two afterimages along its own path
+      const tick = Math.floor(performance.now() / 60);
+      if (tick !== jitT) {
+        jitT = tick;
+        const r = () => Math.random() * 2 - 1;
+        jit = [0, 1, 2].map(() => ({ dx: 3 * r(), dy: 3 * r(), tilt: [0.045 * r(), 0.045 * r(), 0.045 * r()], fl: 0.8 + 0.45 * r() }));
+      }
+      [q, ...runs.map((r) => r.q)].forEach((qq, i) => {
+        if (!qq) return;
+        const h = mcHist[i];
+        ctx.lineWidth = 1;
+        for (const [lag, a] of [[5, 0.16], [10, 0.08]]) {
+          const qh = h[h.length - 1 - lag];
+          if (qh) { craft(qh); ctx.globalAlpha = a * m; ctx.stroke(); }
+        }
+        const J = jit[i];
+        ctx.save(); ctx.translate(J.dx * m, J.dy * m);
+        craft(qmul(qq, qexp(scl(J.tilt, m))));
+        ctx.globalAlpha = 0.12 * m * J.fl; ctx.lineWidth = 4; ctx.stroke();
+        if (i === 0) { ctx.globalAlpha = 0.18 * (1 - m); ctx.lineWidth = 5; ctx.stroke(); }
+        ctx.globalAlpha = Math.min(1, (i === 0 ? 1 - 0.6 * m : 0.4 * m) * J.fl); ctx.lineWidth = 1.4; ctx.stroke();
+        ctx.restore();
+      });
+    }
     ctx.globalAlpha = 1;
 
     // readouts, throttled: text with glow is costly to repaint
