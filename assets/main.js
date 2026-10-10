@@ -15,10 +15,9 @@
   setInterval(tick, 1000);
   document.getElementById("year").textContent = new Date().getFullYear();
 
-  // ---- hero orbit: the satellite passes behind the planet on the far half ----
+  // ---- hero orbit: the satellite rides above the ring and is hidden only by the planet's disc ----
   const sat = document.getElementById("sat");
-  const satBack = document.getElementById("satBack");
-  const satFront = document.getElementById("satFront");
+  const satLayer = document.getElementById("satLayer");
   const satNight = document.getElementById("satNight");
   const ORBIT = { cx: 200, cy: 200, rx: 185, ry: 62, tilt: -18 * Math.PI / 180, period: 14 };
   const PLANET_R = 92;
@@ -113,9 +112,12 @@
     const c = tc, s = ts;
     const x = ORBIT.cx + ex * c - ey * s, y = ORBIT.cy + ex * s + ey * c;
     if (satNight) satNight.setAttribute("opacity", (0.78 * umbra(ringPoint(th))).toFixed(2));
-    const behind = ey < 0; // far side of the ring
-    const layer = behind ? satBack : satFront;
-    if (sat.parentNode !== layer) layer.appendChild(sat);
+    // On the far half the planet occludes it. The switch happens at the ring's ends, well clear
+    // of the disc, so it never shows; the ring itself never covers the satellite.
+    const behind = ey < 0;
+    if (behind !== satLayer.hasAttribute("mask")) {
+      if (behind) satLayer.setAttribute("mask", "url(#offPlanet)"); else satLayer.removeAttribute("mask");
+    }
     // tangent heading, plus a little foreshortening on the far side
     const tx = -ORBIT.rx * Math.sin(th), ty = ORBIT.ry * Math.cos(th);
     const ang = Math.atan2(tx * s + ty * c, tx * c - ty * s) * 180 / Math.PI;

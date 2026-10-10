@@ -96,7 +96,6 @@
           <circle cx="365" cy="62" r="9" class="sun__star"/>
         </g>
         <ellipse cx="200" cy="200" rx="185" ry="62" class="ring ring--back" transform="rotate(-18 200 200)"/>
-        <g id="satBack"></g>
         <circle cx="200" cy="200" r="92" class="planet"/>
         <g clip-path="url(#planetClip)" class="planet__bands">
           <path d="M259.5 129.8 A79.9 26.8 -18 1 1 110.6 178.2" stroke-width="14"/>
@@ -108,7 +107,7 @@
         <circle cx="200" cy="200" r="92" class="planet__outline"/>
         <path d="M 15 200 A 185 62 0 0 0 385 200" class="ring ring--front" transform="rotate(-18 200 200)"/>
         <path id="ringShadow" class="ring-shadow" mask="url(#offPlanet)"/>
-        <g id="satFront">
+        <g id="satLayer">
           <g class="sat" id="sat" transform="translate(30 235)">
             <rect x="-7" y="-7" width="14" height="14" class="sat__bus"/>
             <rect x="-30" y="-4" width="20" height="8" class="sat__panel"/>
