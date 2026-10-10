@@ -147,11 +147,8 @@ h1 em, .contact h2 em { font-style: normal; color: var(--orange); }
 .planet { fill: var(--teal); }
 .planet__outline { fill: none; stroke: var(--ink); stroke-width: 3; }
 .planet__bands path { fill: none; stroke: var(--ink); opacity: .22; }
-.ring { fill: none; stroke: url(#ringGrad); stroke-width: 9; }
-/* opaque mixes, not opacity, so the front half can overlap the back without a seam */
-#ringGrad stop { stop-color: var(--orange); }
-#ringGrad stop:nth-child(1) { stop-color: color-mix(in srgb, var(--orange) 40%, var(--paper)); }
-#ringGrad stop:nth-child(2) { stop-color: color-mix(in srgb, var(--orange) 80%, var(--paper)); }
+/* one flat colour: the planet's shadow is the only darkening on the ring */
+.ring { fill: none; stroke: var(--orange); stroke-width: 9; }
 .ring-shadow { fill: none; stroke: url(#ringShadowGrad); stroke-width: 9.5; opacity: .55; }
 #ringShadowGrad stop { stop-color: #03100e; }
 .sat__night rect { fill: #03100e; stroke: #03100e; stroke-width: 2; }
