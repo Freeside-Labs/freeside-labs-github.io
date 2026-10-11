@@ -251,9 +251,10 @@
   let lens = null, lensN = -1;
   // Monte Carlo: two dispersed runs fly the same slew. Their errors grow mid-slew on opposite
   // sides of the boresight and close out by the end, so all three arrive on the same target.
-  // Drawn as a superposition: the craft leaves bright, splits into three equal dim blurred
-  // copies, and collapses back to the one bright craft at the target.
-  let mcMix = 0, mcHist = [[], [], []], jit = [], jitT = -1;
+  // Drawn as a superposition: the craft splits into three faint blurred copies, each tracing its
+  // own boresight path. The flown one brightens and sharpens through the slew while the others
+  // fade, the least likely (largest dispersion) first. mcW holds each copy's brightness.
+  let mcW = [1, 0, 0], mcPts = [];
   const mcSpread = () => runs.reduce((m, r) => Math.max(m, r.q ? errAngle(q, r.q) : 0), 0) * D;
   const setLens = (n) => {
     lensN = n; lens = LENSES[n];
@@ -285,16 +286,27 @@
 
   const newSlew = (advance = true) => {
     q0 = qc;
-    const flexNext = advance && LENSES[(lensN + 1) % LENSES.length].key === "flex";
+    const next = advance ? LENSES[(lensN + 1) % LENSES.length].key : null, flexNext = next === "flex";
     let axis, ang, best = -1;
-    // the f₁ lens gets a big slew across the wings (that is what bends them), ending where
-    // the bend lies side-on to the camera rather than toward it
-    for (let k = 0; k < (flexNext ? 60 : 1); k++) {
-      const qq = randomQ(), aa = toAxisAngle(qmul(qconj(q0), qq));
-      const d = scl(unit([aa.axis[2], 0, -aa.axis[0]]), 0.2), tip = [0, ROOT + SPAN, 0];
-      const [x1, y1] = project(rotate(qq, tip)), [x2, y2] = project(rotate(qq, add(tip, d)));
-      const score = Math.hypot(x2 - x1, y2 - y1) * Math.hypot(aa.axis[0], aa.axis[2]) * Math.min(1, aa.ang / (90 / D));
-      if (score > best) { best = score; qT = qq; ({ axis, ang } = aa); }
+    // Some lenses pick their target for what they need to show. f₁: a big slew across the wings
+    // (that is what bends them), ending with the bend side-on to the camera. MC: a boresight path
+    // that sweeps across the screen rather than toward the viewer, so the runs' paths can part.
+    const score = (qq, aa) => {
+      if (flexNext) {
+        const d = scl(unit([aa.axis[2], 0, -aa.axis[0]]), 0.2), tip = [0, ROOT + SPAN, 0];
+        const [x1, y1] = project(rotate(qq, tip)), [x2, y2] = project(rotate(qq, add(tip, d)));
+        return Math.hypot(x2 - x1, y2 - y1) * Math.hypot(aa.axis[0], aa.axis[2]) * Math.min(1, aa.ang / (90 / D));
+      }
+      let len = 0, p = project(rotate(q0, [0, 0, BORE]));
+      for (let k = 1; k <= 12; k++) {
+        const n = project(rotate(qmul(q0, qaxis(aa.axis, aa.ang * k / 12)), [0, 0, BORE]));
+        len += Math.hypot(n[0] - p[0], n[1] - p[1]); p = n;
+      }
+      return len;
+    };
+    for (let k = 0; k < (flexNext || next === "mc" ? 60 : 1); k++) {
+      const qq = randomQ(), aa = toAxisAngle(qmul(qconj(q0), qq)), sc = score(qq, aa);
+      if (sc > best) { best = sc; qT = qq; ({ axis, ang } = aa); }
     }
     // ~45°/s average, it's a demo; the f₁ slew runs a little hotter so the arrays ring after it
     const dur = (2.2 + (ang * D) / 45) * (flexNext ? 0.85 : 1);
@@ -305,7 +317,8 @@
     // gyro scale factor before calibration: 2–3.5 % either sign
     est.sf = (Math.random() < 0.5 ? -1 : 1) * (0.02 + 0.015 * Math.random());
     const side = 2 * Math.PI * Math.random();
-    runs = [[side, 11], [side + Math.PI - 0.5, 17]].map(([a, deg]) => ({ axis: [Math.cos(a), Math.sin(a), 0], amp: deg / D, q: null, pts: [] }));
+    runs = [[side, 20], [side + Math.PI - 0.5, 28]].map(([a, deg]) => ({ axis: [Math.cos(a), Math.sin(a), 0], amp: deg / D, q: null, pts: [] }));
+    mcPts = [];
     wob = [unit(randomQ().slice(1)), unit(randomQ().slice(1))];
   };
 
@@ -319,13 +332,16 @@
       const th = slew.ang * (s - Math.sin(2 * Math.PI * s) / (2 * Math.PI));
       alpha = scl(slew.axis, slew.ang * 2 * Math.PI * Math.sin(2 * Math.PI * s) / (slew.dur * slew.dur));
       qc = qmul(q0, qaxis(slew.axis, th));
-      mcMix = lens.key === "mc" ? smooth(0, 0.15, s) * (1 - smooth(0.85, 1, s)) : 0;
+      if (lens.key === "mc") {
+        const split = smooth(0, 0.12, s);
+        mcW = [1 - 0.6 * split * (1 - smooth(0.15, 0.95, s)), 0.3 * split * (1 - smooth(0.3, 0.85, s)), 0.2 * split * (1 - smooth(0.2, 0.65, s))];
+      }
       if (lens.key === "mc") for (const r of runs) {
         r.q = qmul(qc, qexp(scl(r.axis, r.amp * Math.sin(Math.PI * s))));
         r.pts.push(project(rotate(r.q, [0, 0, BORE])));
       }
-      if (lens.key === "mc") [q, ...runs.map((r) => r.q)].forEach((qq, i) => { mcHist[i].push(qq); if (mcHist[i].length > 14) mcHist[i].shift(); });
-      if (s >= 1) { phase = "SETTLE"; phaseT = 0; tEnd = 0; qc = qT; mcMix = 0; for (const r of runs) { r.q = null; r.pts = []; } mcHist = [[], [], []]; }
+      if (lens.key === "mc") mcPts.push(project(rotate(qc, [0, 0, BORE])));
+      if (s >= 1) { phase = "SETTLE"; phaseT = 0; tEnd = 0; qc = qT; mcW = [1, 0, 0]; for (const r of runs) r.q = null; }
     } else if (phase === "SETTLE") {
       if ((phaseT > 0.6 && amp() < 0.005) || phaseT > (lens && lens.key === "flex" ? 7 : 5)) { phase = "LOCK"; phaseT = 0; }
     } else if (phase === "LOCK" && uplink && arrived() < UP.packets) {
@@ -397,10 +413,12 @@
       ctx.setLineDash([2, 3]); ctx.beginPath(); poly(plan); ctx.stroke(); ctx.setLineDash([]);
       ctx.beginPath(); line(...eig); ctx.stroke();
     } else if (L === "mc") {
-      // each run's boresight trail, dotted, fading with the superposition
-      ctx.globalAlpha = 0.6 * mcMix; ctx.setLineDash([1, 3]); ctx.beginPath();
-      for (const r of runs) poly(r.pts);
-      ctx.stroke(); ctx.setLineDash([]);
+      // every copy's boresight path, as bright as its copy; the flown one lingers after the slew
+      ctx.setLineDash([1, 3]);
+      runs.forEach((r, i) => { ctx.globalAlpha = 1.6 * mcW[i + 1]; ctx.beginPath(); poly(r.pts); ctx.stroke(); });
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 0.6 * (phase === "SLEW" ? mcW[0] : Math.max(0, 1 - tEnd / 1.2));
+      ctx.beginPath(); poly(mcPts); ctx.stroke();
     } else if (L === "flex") {
       ctx.beginPath();
       for (const [a, b] of wingEdges) line(rotate(q, a), rotate(q, b));
@@ -453,35 +471,20 @@
       for (const [a, b] of wingEdges) line(rotate(qq, bend(a, e)), rotate(qq, bend(b, e)));
       line(rotate(qq, boresight[0]), rotate(qq, boresight[1]));
     };
-    const m = L === "mc" ? mcMix : 0;
-    if (m === 0) {
+    if (!(L === "mc" && phase === "SLEW")) {
       craft(q);
       ctx.globalAlpha = 0.18; ctx.lineWidth = 5; ctx.stroke();
       ctx.globalAlpha = 1; ctx.lineWidth = 1.4; ctx.stroke();
     } else {
-      // superposition: every copy stutters (new random shift, tilt and flicker ~16 times a
-      // second) and trails two afterimages along its own path
-      const tick = Math.floor(performance.now() / 60);
-      if (tick !== jitT) {
-        jitT = tick;
-        const r = () => Math.random() * 2 - 1;
-        jit = [0, 1, 2].map(() => ({ dx: 3 * r(), dy: 3 * r(), tilt: [0.045 * r(), 0.045 * r(), 0.045 * r()], fl: 0.8 + 0.45 * r() }));
-      }
+      // superposition: wide soft strokes carry a faint copy, so it reads blurred; the sharp core
+      // comes in with the square of its brightness, so only the likeliest copy turns crisp
       [q, ...runs.map((r) => r.q)].forEach((qq, i) => {
-        if (!qq) return;
-        const h = mcHist[i];
-        ctx.lineWidth = 1;
-        for (const [lag, a] of [[5, 0.16], [10, 0.08]]) {
-          const qh = h[h.length - 1 - lag];
-          if (qh) { craft(qh); ctx.globalAlpha = a * m; ctx.stroke(); }
-        }
-        const J = jit[i];
-        ctx.save(); ctx.translate(J.dx * m, J.dy * m);
-        craft(qmul(qq, qexp(scl(J.tilt, m))));
-        ctx.globalAlpha = 0.12 * m * J.fl; ctx.lineWidth = 4; ctx.stroke();
-        if (i === 0) { ctx.globalAlpha = 0.18 * (1 - m); ctx.lineWidth = 5; ctx.stroke(); }
-        ctx.globalAlpha = Math.min(1, (i === 0 ? 1 - 0.6 * m : 0.4 * m) * J.fl); ctx.lineWidth = 1.4; ctx.stroke();
-        ctx.restore();
+        const b = mcW[i];
+        if (!qq || b < 0.01) return;
+        craft(qq);
+        ctx.globalAlpha = 0.16 * b; ctx.lineWidth = 7; ctx.stroke();
+        ctx.globalAlpha = 0.3 * b; ctx.lineWidth = 3; ctx.stroke();
+        ctx.globalAlpha = b * b; ctx.lineWidth = 1.4; ctx.stroke();
       });
     }
     ctx.globalAlpha = 1;
