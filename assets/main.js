@@ -175,10 +175,13 @@
   const css = getComputedStyle(document.querySelector(".console .crt"));
   const PHOS = css.getPropertyValue("--c").trim() || "#7cf3a2";
   const DIM = css.getPropertyValue("--cd").trim() || "#3f9563";
+  const root = getComputedStyle(document.documentElement);
+  const AMBER = root.getPropertyValue("--amber").trim() || "#ffb547", AMBER_DIM = root.getPropertyValue("--amber-dim").trim() || "#b07a2e";
 
   const add = (a, b) => a.map((c, i) => c + b[i]);
   const scl = (a, k) => a.map((c) => c * k);
   const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
   const unit = (v) => scl(v, 1 / Math.hypot(...v));
   const qexp = (r) => { const n = Math.hypot(...r); return n < 1e-12 ? [1, 0, 0, 0] : qaxis(scl(r, 1 / n), n); };
   const D = 180 / Math.PI;
@@ -205,8 +208,14 @@
     for (const y of [0.8, 1.1, 1.4]) seg([-0.32, s * y, 0], [0.32, s * y, 0]);
     edges.push([[0, s * 0.45, 0], [0, s * 0.5, 0]]);
   }
-  const BORE = 1.6;
+  const BORE = 1.6, EST_DEF = 4;
   const boresight = [[0, 0, 0.55], [0, 0, BORE]];
+  // star tracker on the bus's −x face, looking up and back; stars are fixed inertial directions
+  const TRK = { at: [-0.45, 0.15, 0.35], dir: unit([-1, 0.3, 1]) };
+  const STARS = Array.from({ length: 14 }, (_, i) => {
+    const zz = 1 - (2 * i + 1) / 14, rr = Math.sqrt(1 - zz * zz), a = i * 2.39996 + 0.7;
+    return scl([rr * Math.cos(a), rr * Math.sin(a), zz], 2.2);
+  });
 
   // First wing bending mode, antisymmetric: the tips lag the bus's angular acceleration.
   // eta = [x, z] tip deflection in metres; shape is the uniform-load cantilever curve.
@@ -224,6 +233,26 @@
   const J = [60, 25, 55], IW = 0.25, BIAS = 1200, RPM = 60 / (2 * Math.PI);
   const ce = Math.cos(0.6155), se = Math.sin(0.6155);
   const WA = [45, 135, 225, 315].map((p) => [ce * Math.cos(p / D), ce * Math.sin(p / D), se]);
+  // Momentum envelope: every total wheel momentum the pyramid can hold with each wheel inside
+  // ±3000 rpm, a zonotope of 12 parallelogram faces, fixed in the body. Display scale KH puts
+  // its extent at 1.5 units; edges are deduplicated once here.
+  const HMAX = IW * 3000 / RPM, KH = 1.5 / (4 * se * HMAX), G = WA.map((a) => scl(a, HMAX * KH));
+  const envEdges = (() => {
+    const out = new Map();
+    for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) {
+      const n = cross(G[i], G[j]);
+      for (const sg of [1, -1]) {
+        let c = [0, 0, 0];
+        for (let k = 0; k < 4; k++) if (k !== i && k !== j) c = add(c, scl(G[k], sg * Math.sign(dot(n, G[k]))));
+        const P = [[1, 1], [1, -1], [-1, -1], [-1, 1]].map(([a, b]) => add(c, add(scl(G[i], a), scl(G[j], b))));
+        P.forEach((p, k) => {
+          const e = [p, P[(k + 1) % 4]], key = e.map((v) => v.map((x) => x.toFixed(3)).join()).sort().join("|");
+          out.set(key, e);
+        });
+      }
+    }
+    return [...out.values()];
+  })();
   const wheelRpm = (w) => {
     const h = [-J[0] * w[0] / (2 * ce * ce), -J[1] * w[1] / (2 * ce * ce), -J[2] * w[2] / (4 * se * se)];
     return WA.map((a, i) => (a[0] * h[0] + a[1] * h[1] + a[2] * h[2]) / IW * RPM + (i % 2 ? -BIAS : BIAS));
@@ -249,23 +278,31 @@
     { key: "mc", card: 5, label: "MC" },
   ];
   let lens = null, lensN = -1;
-  // Monte Carlo: two dispersed runs fly the same slew. Their errors grow mid-slew on opposite
-  // sides of the boresight and close out by the end, so all three arrive on the same target.
-  // Drawn as a superposition: the craft splits into three faint blurred copies, each tracing its
-  // own boresight path. The flown one brightens and sharpens through the slew while the others
-  // fade, the least likely (largest dispersion) first. mcW holds each copy's brightness.
+  // Path search: two rival routes to the same target run alongside the flown eigenaxis slew,
+  // the long way round the same axis and a yaw-pitch-roll Euler sequence. Drawn as a
+  // superposition: the craft splits into three faint blurred copies, each tracing its own
+  // boresight path. The flown one, the shortest rotation, brightens and sharpens through the
+  // slew while the others fade, the one that turns furthest first. mcW holds each copy's brightness.
   let mcW = [1, 0, 0], mcPts = [];
-  const mcSpread = () => runs.reduce((m, r) => Math.max(m, r.q ? errAngle(q, r.q) : 0), 0) * D;
   const setLens = (n) => {
     lensN = n; lens = LENSES[n];
     cards.forEach((c, i) => c.classList.toggle("on", i === lens.card));
+  };
+  // A click on a card queues its lens for the next slew. One slot, latest click wins, so
+  // mashing the cards can't stack anything up; the current slew always finishes first.
+  let queued = -1;
+  const nextN = () => (queued >= 0 ? queued : (lensN + 1) % LENSES.length);
+  const takeNext = () => {
+    const n = nextN();
+    queued = -1; cards.forEach((c) => c.classList.remove("queued"));
+    return n;
   };
   // Flight software: before its slew the command load is uplinked from a ground station
   // at the lower right, as packets of bits (filled = 1) streaming into the bus.
   const UP = { packets: 8, every: 0.3, travel: 1.4, bits: 8 };
   let uplink = null;
   const startUplink = () => {
-    setLens(lensN + 1);
+    setLens(takeNext());
     uplink = { t: 0, bytes: Array.from({ length: UP.packets }, () => Math.floor(Math.random() * 256)) };
   };
   const arrived = () => (uplink ? Math.max(0, Math.min(UP.packets, Math.floor((uplink.t - UP.travel) / UP.every) + 1)) : 0);
@@ -273,6 +310,7 @@
   // ---- state ----
   let q = [1, 0, 0, 0], qc = q, q0 = q, qT = q, slew = null, phase = "INIT", phaseT = 0, tEnd = 0, slewT = 0;
   let eta = [0, 0], etaD = [0, 0], wb = [0, 0, 0], wDeg = 0;
+  let hPath = [];
   let est = { e: [0, 0, 0], s3: 0.003 / D, sf: 0, st: true };
   let plan = [], eig = null, runs = [], wob = [[1, 0, 0], [0, 1, 0]];
   const t0 = performance.now();
@@ -286,11 +324,11 @@
 
   const newSlew = (advance = true) => {
     q0 = qc;
-    const next = advance ? LENSES[(lensN + 1) % LENSES.length].key : null, flexNext = next === "flex";
+    const next = advance ? LENSES[nextN()].key : null, flexNext = next === "flex";
     let axis, ang, best = -1;
     // Some lenses pick their target for what they need to show. f₁: a big slew across the wings
     // (that is what bends them), ending with the bend side-on to the camera. MC: a boresight path
-    // that sweeps across the screen rather than toward the viewer, so the runs' paths can part.
+    // that sweeps across the screen rather than toward the viewer, so the rival paths can part.
     const score = (qq, aa) => {
       if (flexNext) {
         const d = scl(unit([aa.axis[2], 0, -aa.axis[0]]), 0.2), tip = [0, ROOT + SPAN, 0];
@@ -302,22 +340,33 @@
         const n = project(rotate(qmul(q0, qaxis(aa.axis, aa.ang * k / 12)), [0, 0, BORE]));
         len += Math.hypot(n[0] - p[0], n[1] - p[1]); p = n;
       }
-      return len;
+      // and a slew well short of 180°, so the long way round is plainly the longer route
+      return aa.ang > 70 / D && aa.ang < 130 / D ? len : len / 10;
     };
     for (let k = 0; k < (flexNext || next === "mc" ? 60 : 1); k++) {
       const qq = randomQ(), aa = toAxisAngle(qmul(qconj(q0), qq)), sc = score(qq, aa);
       if (sc > best) { best = sc; qT = qq; ({ axis, ang } = aa); }
     }
-    // ~45°/s average, it's a demo; the f₁ slew runs a little hotter so the arrays ring after it
-    const dur = (2.2 + (ang * D) / 45) * (flexNext ? 0.85 : 1);
+    // ~45°/s average, it's a demo; the f₁ slew runs hotter so the arrays ring after it, and the
+    // RW slew hotter still so the momentum path reaches well into the envelope
+    const dur = (2.2 + (ang * D) / 45) * (flexNext ? 0.85 : next === "ctrl" ? 0.7 : 1);
     slew = { axis, ang, dur };
+    hPath = [];
     phase = "SLEW"; phaseT = 0; slewT = 0;
-    if (advance) { setLens((lensN + 1) % LENSES.length); uplink = null; }
+    if (advance) { setLens(takeNext()); uplink = null; }
     planPath();
     // gyro scale factor before calibration: 2–3.5 % either sign
     est.sf = (Math.random() < 0.5 ? -1 : 1) * (0.02 + 0.015 * Math.random());
-    const side = 2 * Math.PI * Math.random();
-    runs = [[side, 20], [side + Math.PI - 0.5, 28]].map(([a, deg]) => ({ axis: [Math.cos(a), Math.sin(a), 0], amp: deg / D, q: null, pts: [] }));
+    // rival routes, as functions of the slew's progress c (0..1), in order of total rotation
+    const [w, x, y, z] = qmul(qconj(q0), qT);
+    const psi = Math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z));
+    const tht = Math.asin(Math.max(-1, Math.min(1, 2 * (w * y - z * x))));
+    const phi = Math.atan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y));
+    runs = [
+      { tot: 2 * Math.PI - ang, at: (c) => qmul(q0, qaxis(scl(axis, -1), (2 * Math.PI - ang) * c)) },
+      { tot: Math.abs(psi) + Math.abs(tht) + Math.abs(phi), at: (c) => qmul(q0, qmul(qaxis([0, 0, 1], psi * smooth(0, 1, 3 * c)),
+        qmul(qaxis([0, 1, 0], tht * smooth(1, 2, 3 * c)), qaxis([1, 0, 0], phi * smooth(2, 3, 3 * c))))) },
+    ].sort((a, b) => a.tot - b.tot).map((r) => ({ ...r, q: null, pts: [] }));
     mcPts = [];
     wob = [unit(randomQ().slice(1)), unit(randomQ().slice(1))];
   };
@@ -337,7 +386,7 @@
         mcW = [1 - 0.6 * split * (1 - smooth(0.15, 0.95, s)), 0.3 * split * (1 - smooth(0.3, 0.85, s)), 0.2 * split * (1 - smooth(0.2, 0.65, s))];
       }
       if (lens.key === "mc") for (const r of runs) {
-        r.q = qmul(qc, qexp(scl(r.axis, r.amp * Math.sin(Math.PI * s))));
+        r.q = r.at(th / slew.ang);
         r.pts.push(project(rotate(r.q, [0, 0, BORE])));
       }
       if (lens.key === "mc") mcPts.push(project(rotate(qc, [0, 0, BORE])));
@@ -348,7 +397,7 @@
       uplink.t += dt;
       if (arrived() === UP.packets) { phaseT = 2.2; } // hold briefly, then execute the load
     } else if (phase === "LOCK" && phaseT > 2.6) {
-      if (LENSES[(lensN + 1) % LENSES.length].key === "fsw" && !uplink) { startUplink(); phaseT = 0; }
+      if (LENSES[nextN()].key === "fsw" && !uplink) { startUplink(); phaseT = 0; }
       else if (uplink && !uplink.sent) { uplink.sent = true; newSlew(false); } // execute the uplinked load
       else newSlew();
     }
@@ -371,6 +420,9 @@
       wb = nv > 1e-15 ? scl(v, (Math.sign(d[0]) || 1) * ang / nv / dt) : [0, 0, 0];
       wDeg = ang / dt * D;
     }
+
+    // the wheels hold what the body doesn't: h = −Jω, in body axes, at the envelope's scale
+    if (lens && lens.key === "ctrl" && phase !== "LOCK") hPath.push(wb.map((w, i) => -J[i] * w * KH));
 
     // estimator: the star tracker drops out above 1 °/s; the gyro then integrates its scale-factor error
     est.st = wDeg < 1;
@@ -424,16 +476,22 @@
       for (const [a, b] of wingEdges) line(rotate(q, a), rotate(q, b));
       ctx.stroke();
     } else if (L === "est") {
-      const qe = qmul(q, qexp(est.e)), dir = rotate(qe, [0, 0, 1]);
-      const u = unit(cross(dir, Math.abs(dir[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0])), v = cross(dir, u);
-      // drawn out past the real boresight, like the target line, so the cone reads at this size
-      const c = scl(dir, 2.4), r = 2.4 * Math.tan(est.s3);
-      ctx.beginPath(); line(scl(dir, 0.55), c);
-      for (let i = 0; i <= 32; i++) {
-        const a = (i / 32) * 2 * Math.PI, [x, y] = project(add(c, add(scl(u, r * Math.cos(a)), scl(v, r * Math.sin(a)))));
-        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
-      }
+      // star field; while the tracker holds, sight lines run from it to the three stars nearest
+      // its boresight and each is boxed; above 1 °/s they drop and the field dims
+      const td = rotate(q, TRK.dir), at = rotate(q, TRK.at);
+      ctx.globalAlpha = est.st ? 0.9 : 0.45;
+      ctx.beginPath();
+      for (const st of STARS) { const [x, y] = project(st); ctx.moveTo(x - 2.5, y); ctx.lineTo(x + 2.5, y); ctx.moveTo(x, y - 2.5); ctx.lineTo(x, y + 2.5); }
       ctx.stroke();
+      if (est.st) {
+        const near = [...STARS].sort((a, b) => dot(b, td) - dot(a, td)).slice(0, 3);
+        ctx.setLineDash([2, 3]); ctx.beginPath();
+        for (const st of near) line(at, st);
+        ctx.stroke(); ctx.setLineDash([]);
+        ctx.beginPath();
+        for (const st of near) { const [x, y] = project(st); ctx.rect(x - 5.5, y - 5.5, 11, 11); }
+        ctx.stroke();
+      }
     } else if (L === "fsw" && uplink && arrived() < UP.packets) {
       // ground station at the lower right; bits ride the link into the bus, 1 filled, 0 hollow
       const [gx, gy] = [W - 18, H - 18], [bx, by] = project([0, 0, 0]);
@@ -453,12 +511,11 @@
       });
       ctx.strokeStyle = DIM;
     } else if (L === "ctrl") {
-      // four wheel speeds, ±4000 rpm full scale, in a small gauge at the lower left
-      const X = 16, Y = 250, S = 30;
-      ctx.strokeRect(X - 0.5, Y - S - 0.5, 50, 2 * S + 1);
-      ctx.beginPath(); ctx.moveTo(X, Y); ctx.lineTo(X + 50, Y); ctx.stroke();
-      ctx.fillStyle = PHOS; ctx.globalAlpha = 0.8;
-      wheelRpm(wb).forEach((w, i) => { const hgt = Math.max(-S, Math.min(S, (w / 4000) * S)); ctx.fillRect(X + 5 + i * 11, Y - Math.max(0, hgt), 7, Math.abs(hgt)); });
+      // the momentum envelope, in amber, turning with the body
+      ctx.strokeStyle = AMBER_DIM; ctx.globalAlpha = 0.55; ctx.beginPath();
+      for (const [a, b] of envEdges) line(rotate(q, a), rotate(q, b));
+      ctx.stroke();
+      ctx.strokeStyle = DIM;
     }
     ctx.globalAlpha = 1;
 
@@ -487,6 +544,29 @@
         ctx.globalAlpha = b * b; ctx.lineWidth = 1.4; ctx.stroke();
       });
     }
+    if (L === "ctrl") {
+      // the momentum path so far, and where it is now
+      if (hPath.length > 1) {
+        ctx.strokeStyle = AMBER; ctx.fillStyle = AMBER; ctx.globalAlpha = 0.95; ctx.lineWidth = 1.6;
+        ctx.beginPath(); poly(hPath.map((h) => project(rotate(q, h)))); ctx.stroke();
+        const [x, y] = project(rotate(q, hPath[hPath.length - 1]));
+        ctx.beginPath(); ctx.arc(x, y, 3, 0, 2 * Math.PI); ctx.fill();
+      }
+      ctx.strokeStyle = PHOS; ctx.lineWidth = 1;
+    }
+    if (L === "est") {
+      // the estimate, its error drawn ×4, dashed, with its 3σ ring at the boresight tip
+      const qe = qmul(q, qexp(scl(est.e, EST_DEF))), dir = rotate(qe, [0, 0, 1]);
+      const u = unit(cross(dir, Math.abs(dir[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0])), v = cross(dir, u);
+      const c = scl(dir, BORE), r = BORE * Math.tan(Math.min(1, EST_DEF * est.s3));
+      ctx.setLineDash([3, 3]); craft(qe); ctx.globalAlpha = 0.55; ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
+      ctx.beginPath();
+      for (let i = 0; i <= 32; i++) {
+        const a = (i / 32) * 2 * Math.PI, [x, y] = project(add(c, add(scl(u, r * Math.cos(a)), scl(v, r * Math.sin(a)))));
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.stroke();
+    }
     ctx.globalAlpha = 1;
 
     // readouts, throttled: text with glow is costly to repaint
@@ -504,11 +584,11 @@
       out.lk.textContent = lens.label;
       out.lv.textContent =
         L === "guid" ? `${(slew.ang * D).toFixed(1)} ° in ${slew.dur.toFixed(1)} s` :
-        L === "est" ? `${(est.s3 * D).toFixed(3)} ° ${est.st ? "ST+GYRO" : "GYRO"}` :
+        L === "est" ? `${(est.s3 * D).toFixed(3)} ° ${est.st ? "ST+GYRO" : "GYRO"} ×${EST_DEF}` :
         L === "ctrl" ? wheelRpm(wb).map((w) => sgn(w / 1000, 1)).join(" ") + " krpm" :
         L === "flex" ? `${FLEX.f.toFixed(2)} Hz ζ ${FLEX.zeta.toFixed(2)} ×${FLEX.def}` :
         L === "fsw" ? (arrived() < UP.packets ? `PKT ${arrived()}/${UP.packets}` : `${UP.packets}/${UP.packets} CRC OK · EXEC`) :
-        `3 runs ±${mcSpread().toFixed(2)} °`;
+        [slew.ang, ...runs.map((r) => r.tot)].map((a) => `${(a * D).toFixed(0)}°`).join(" ");
     }
     const el = Math.floor((performance.now() - t0) / 1000);
     out.t.textContent = `${pad(Math.floor(el / 3600))}:${pad(Math.floor(el / 60) % 60)}:${pad(el % 60)}`;
@@ -525,6 +605,18 @@
     render();
     return;
   }
+
+  cards.forEach((c, i) => {
+    const n = LENSES.findIndex((l) => l.card === i);
+    if (n < 0) return;
+    c.tabIndex = 0; c.setAttribute("role", "button"); c.title = "Show this on the console next";
+    const pick = () => {
+      queued = n;
+      cards.forEach((o) => o.classList.toggle("queued", o === c));
+    };
+    c.addEventListener("click", pick);
+    c.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+  });
 
   let visible = true, last = performance.now();
   new IntersectionObserver(([e]) => { visible = e.isIntersecting; last = performance.now(); }).observe(canvas);

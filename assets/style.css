@@ -214,6 +214,9 @@ h1 em, .contact h2 em { font-style: normal; color: var(--orange); }
 .caps li { background: var(--crt); padding: 1rem 1.1rem 1.2rem; transition: background .6s; }
 .caps li.on { background: color-mix(in srgb, var(--c) 8%, var(--crt)); }
 .caps li.on h3 span { color: var(--c); }
+.caps li[role=button] { cursor: pointer; }
+.caps li.queued { outline: 1px dashed var(--c); outline-offset: -6px; }
+.caps li:focus-visible { outline: 1px solid var(--c); outline-offset: -6px; }
 .caps h3 { font: 400 1.45rem/1.1 var(--pixel); text-transform: uppercase; letter-spacing: .04em; margin: 0 0 .5rem; }
 .caps h3 span { color: color-mix(in srgb, var(--c) 75%, var(--cd)); margin-right: .35rem; }
 .caps p { font: 400 .86rem/1.55 var(--mono); margin: 0; color: color-mix(in srgb, var(--c) 82%, white); text-shadow: none; }
