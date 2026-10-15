@@ -288,8 +288,9 @@
     lensN = n; lens = LENSES[n];
     cards.forEach((c, i) => c.classList.toggle("on", i === lens.card));
   };
-  // A click on a card queues its lens for the next slew. One slot, latest click wins, so
-  // mashing the cards can't stack anything up; the current slew always finishes first.
+  // A click on a card queues its lens. One slot, latest click wins, so mashing the cards
+  // can't stack anything up. The current slew always finishes (it ends at rest, so the next
+  // one starts smoothly), then the queued lens goes at once, skipping the settle and hold.
   let queued = -1;
   const nextN = () => (queued >= 0 ? queued : (lensN + 1) % LENSES.length);
   const takeNext = () => {
@@ -399,6 +400,11 @@
     } else if (phase === "LOCK" && phaseT > 2.6) {
       if (LENSES[nextN()].key === "fsw" && !uplink) { startUplink(); phaseT = 0; }
       else if (uplink && !uplink.sent) { uplink.sent = true; newSlew(false); } // execute the uplinked load
+      else newSlew();
+    }
+    if (queued >= 0 && (phase === "SETTLE" || phase === "LOCK")) {
+      uplink = null;
+      if (LENSES[queued].key === "fsw") { startUplink(); phase = "LOCK"; phaseT = 0; }
       else newSlew();
     }
     if (phase === "SETTLE" || phase === "LOCK") tEnd += dt;
