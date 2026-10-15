@@ -176,7 +176,8 @@
   const PHOS = css.getPropertyValue("--c").trim() || "#7cf3a2";
   const DIM = css.getPropertyValue("--cd").trim() || "#3f9563";
   const root = getComputedStyle(document.documentElement);
-  const AMBER = root.getPropertyValue("--amber").trim() || "#ffb547", AMBER_DIM = root.getPropertyValue("--amber-dim").trim() || "#b07a2e";
+  const TEAL = root.getPropertyValue("--crt-teal").trim() || "#5cd3c6", TEAL_DIM = root.getPropertyValue("--crt-teal-dim").trim() || "#2f9c92";
+  const ORANGE = root.getPropertyValue("--crt-orange").trim() || "#ef6a35";
 
   const add = (a, b) => a.map((c, i) => c + b[i]);
   const scl = (a, k) => a.map((c) => c * k);
@@ -253,13 +254,25 @@
     }
     return [...out.values()];
   })();
-  const wheelRpm = (w) => {
-    const h = [-J[0] * w[0] / (2 * ce * ce), -J[1] * w[1] / (2 * ce * ce), -J[2] * w[2] / (4 * se * se)];
+  // wheel speeds from the momentum the wheels hold (body axes), by the pyramid's pseudo-inverse
+  const wheelRpm = (hw) => {
+    const h = [hw[0] / (2 * ce * ce), hw[1] / (2 * ce * ce), hw[2] / (4 * se * se)];
     return WA.map((a, i) => (a[0] * h[0] + a[1] * h[1] + a[2] * h[2]) / IW * RPM + (i % 2 ? -BIAS : BIAS));
   };
 
+  // Solar-wind gust, under the RW lens once the slew has locked: a burst of pressure on one
+  // wing torques the craft off target and the attitude loop (PD, 0.45 Hz, ζ 0.7) rejects it.
+  // e is the pointing error it causes; the wheels soak up the gust's momentum (hExt, inertial),
+  // which the magnetorquers then bleed off slowly. Streaks are drawn in screen space.
+  const GUST = { dur: 1.4, torque: 100, fc: 0.45, zeta: 0.7, dump: 8 };
+  let gust = { t: 1e9, axis: [0, 0, 0], done: true, quiet: 9 }, gE = [0, 0, 0], gED = [0, 0, 0], hExt = [0, 0, 0], streaks = [];
+  const gustOn = () => gust.t < GUST.dur;
+  const gustBusy = () => gustOn() || Math.hypot(...gE) > 0.003 || gust.quiet < 1;
+
   // Fixed camera: tilt the inertial frame so the view isn't face-on.
   const cam = qmul(qaxis([1, 0, 0], -1.05), qaxis([0, 0, 1], 0.6));
+  // the gust blows left to right across the screen, a little downward
+  const WIND = unit(rotate(qconj(cam), [1, 0, -0.25]));
   const project = (v) => {
     const p = rotate(cam, v);
     const d = 5.2, f = 300 / (d - p[1]);
@@ -312,6 +325,8 @@
   let q = [1, 0, 0, 0], qc = q, q0 = q, qT = q, slew = null, phase = "INIT", phaseT = 0, tEnd = 0, slewT = 0;
   let eta = [0, 0], etaD = [0, 0], wb = [0, 0, 0], wDeg = 0;
   let hPath = [];
+  // momentum held by the wheels, body axes: what the body doesn't carry, plus what the gust put in
+  const hWheel = () => add(wb.map((w, i) => -J[i] * w), rotate(qconj(q), hExt));
   let est = { e: [0, 0, 0], s3: 0.003 / D, sf: 0, st: true };
   let plan = [], eig = null, runs = [], wob = [[1, 0, 0], [0, 1, 0]];
   const t0 = performance.now();
@@ -352,7 +367,7 @@
     // RW slew hotter still so the momentum path reaches well into the envelope
     const dur = (2.2 + (ang * D) / 45) * (flexNext ? 0.85 : next === "ctrl" ? 0.7 : 1);
     slew = { axis, ang, dur };
-    hPath = [];
+    hPath = []; gust.done = next !== "ctrl"; gust.t = 1e9;
     phase = "SLEW"; phaseT = 0; slewT = 0;
     if (advance) { setLens(takeNext()); uplink = null; }
     planPath();
@@ -397,7 +412,9 @@
     } else if (phase === "LOCK" && uplink && arrived() < UP.packets) {
       uplink.t += dt;
       if (arrived() === UP.packets) { phaseT = 2.2; } // hold briefly, then execute the load
-    } else if (phase === "LOCK" && phaseT > 2.6) {
+    } else if (phase === "LOCK" && lens.key === "ctrl" && !gust.done && phaseT > 0.5) {
+      gust = { t: 0, done: true, quiet: 0, axis: unit(cross(rotate(q, [0, 1.2, 0]), WIND)) };
+    } else if (phase === "LOCK" && phaseT > 2.6 && !(lens.key === "ctrl" && gustBusy())) {
       if (LENSES[nextN()].key === "fsw" && !uplink) { startUplink(); phaseT = 0; }
       else if (uplink && !uplink.sent) { uplink.sent = true; newSlew(false); } // execute the uplinked load
       else newSlew();
@@ -418,7 +435,23 @@
     }
     // the bus reacts against the bending wings, and holds with a small wobble once settled
     const b = 4e-5 * (1 - Math.exp(-tEnd)) * Math.sin(2 * Math.PI * 0.7 * tEnd);
-    q = qmul(qmul(qc, qexp([-FLEX.kappa * eta[1], 0, FLEX.kappa * eta[0]])), qaxis(wob[0], b));
+    // the gust and the loop that fights it, sub-stepped like the flex mode
+    const gw = 2 * Math.PI * GUST.fc;
+    for (let k = 0; k < n; k++) {
+      const on = gust.t < GUST.dur, dI = on ? scl(gust.axis, GUST.torque * Math.sin(Math.PI * gust.t / GUST.dur) ** 2) : [0, 0, 0];
+      const dB = rotate(qconj(qc), dI);
+      for (let i = 0; i < 3; i++) { gED[i] += h * (dB[i] / J[i] - 2 * GUST.zeta * gw * gED[i] - gw * gw * gE[i]); gE[i] += h * gED[i]; }
+      hExt = add(scl(hExt, Math.exp(-h / GUST.dump)), scl(dI, h));
+      gust.t += h;
+    }
+    gust.quiet = gustOn() || Math.hypot(...gE) > 0.003 ? 0 : gust.quiet + dt;
+    q = qmul(qmul(qmul(qc, qexp([-FLEX.kappa * eta[1], 0, FLEX.kappa * eta[0]])), qaxis(wob[0], b)), qexp(gE));
+    // wind streaks: spawned at the left edge while the gust blows, carried across with it
+    const g = gustOn() ? Math.sin(Math.PI * gust.t / GUST.dur) : 0;
+    if (g > 0) for (let k = 0; k < Math.round(g * 60 * dt) + (Math.random() < g * 60 * dt % 1 ? 1 : 0); k++)
+      streaks.push({ x: -20, y: Math.random() * H, len: 10 + 16 * Math.random(), a: 0.4 + 0.5 * Math.random() });
+    for (const st of streaks) st.x += 420 * dt;
+    streaks = streaks.filter((st) => st.x < W + 30);
 
     // body rate, measured from the attitude actually drawn
     if (dt > 0) {
@@ -428,7 +461,7 @@
     }
 
     // the wheels hold what the body doesn't: h = −Jω, in body axes, at the envelope's scale
-    if (lens && lens.key === "ctrl" && phase !== "LOCK") hPath.push(wb.map((w, i) => -J[i] * w * KH));
+    if (lens && lens.key === "ctrl" && (phase !== "LOCK" || gustBusy())) hPath.push(scl(hWheel(), KH));
 
     // estimator: the star tracker drops out above 1 °/s; the gyro then integrates its scale-factor error
     est.st = wDeg < 1;
@@ -517,8 +550,17 @@
       });
       ctx.strokeStyle = DIM;
     } else if (L === "ctrl") {
-      // the momentum envelope, in amber, turning with the body
-      ctx.strokeStyle = AMBER_DIM; ctx.globalAlpha = 0.55; ctx.beginPath();
+      // the momentum envelope, in teal, turning with the body
+      if (streaks.length) {
+        const [ox, oy] = project([0, 0, 0]), [wx, wy] = project(WIND), dl = Math.hypot(wx - ox, wy - oy), ux = (wx - ox) / dl, uy = (wy - oy) / dl;
+        ctx.strokeStyle = ORANGE; ctx.lineWidth = 1.2;
+        for (const st of streaks) {
+          const y = st.y + uy / ux * st.x;
+          ctx.globalAlpha = st.a; ctx.beginPath(); ctx.moveTo(st.x, y); ctx.lineTo(st.x - ux * st.len, y - uy * st.len); ctx.stroke();
+        }
+        ctx.lineWidth = 1;
+      }
+      ctx.strokeStyle = TEAL_DIM; ctx.globalAlpha = 0.6; ctx.beginPath();
       for (const [a, b] of envEdges) line(rotate(q, a), rotate(q, b));
       ctx.stroke();
       ctx.strokeStyle = DIM;
@@ -550,10 +592,15 @@
         ctx.globalAlpha = b * b; ctx.lineWidth = 1.4; ctx.stroke();
       });
     }
+    if (L === "ctrl" && Math.hypot(...gE) * D > 0.3) {
+      // where it should be pointing, while the gust has it off
+      ctx.setLineDash([3, 3]); craft(qc); ctx.strokeStyle = DIM; ctx.globalAlpha = 0.8; ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
+      ctx.strokeStyle = PHOS;
+    }
     if (L === "ctrl") {
       // the momentum path so far, and where it is now
       if (hPath.length > 1) {
-        ctx.strokeStyle = AMBER; ctx.fillStyle = AMBER; ctx.globalAlpha = 0.95; ctx.lineWidth = 1.6;
+        ctx.strokeStyle = TEAL; ctx.fillStyle = TEAL; ctx.globalAlpha = 0.95; ctx.lineWidth = 1.6;
         ctx.beginPath(); poly(hPath.map((h) => project(rotate(q, h)))); ctx.stroke();
         const [x, y] = project(rotate(q, hPath[hPath.length - 1]));
         ctx.beginPath(); ctx.arc(x, y, 3, 0, 2 * Math.PI); ctx.fill();
@@ -580,7 +627,7 @@
     if (now - lastText < 100 && phase === lastPhase) return;
     lastText = now; lastPhase = phase;
     const err = errAngle(q, qT) * D;
-    out.mode.textContent = phase;
+    out.mode.textContent = phase === "LOCK" && L === "ctrl" && (gustOn() || Math.hypot(...gE) * D > 0.05) ? "REJECT" : phase;
     out.mode.classList.toggle("lock", phase === "LOCK");
     out.q.textContent = [q[1], q[2], q[3], q[0]].map(fmt).join(" "); // scalar last: x y z w
     out.w.textContent = `${wDeg.toFixed(3)} °/s`;
@@ -591,7 +638,7 @@
       out.lv.textContent =
         L === "guid" ? `${(slew.ang * D).toFixed(1)} ° in ${slew.dur.toFixed(1)} s` :
         L === "est" ? `${(est.s3 * D).toFixed(3)} ° ${est.st ? "ST+GYRO" : "GYRO"} ×${EST_DEF}` :
-        L === "ctrl" ? wheelRpm(wb).map((w) => sgn(w / 1000, 1)).join(" ") + " krpm" :
+        L === "ctrl" ? (gustBusy() ? `ERR ${(Math.hypot(...gE) * D).toFixed(2)} °` : wheelRpm(hWheel()).map((w) => sgn(w / 1000, 1)).join(" ") + " krpm") :
         L === "flex" ? `${FLEX.f.toFixed(2)} Hz ζ ${FLEX.zeta.toFixed(2)} ×${FLEX.def}` :
         L === "fsw" ? (arrived() < UP.packets ? `PKT ${arrived()}/${UP.packets}` : `${UP.packets}/${UP.packets} CRC OK · EXEC`) :
         [slew.ang, ...runs.map((r) => r.tot)].map((a) => `${(a * D).toFixed(0)}°`).join(" ");

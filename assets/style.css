@@ -22,6 +22,10 @@
   --phos-dim: #3f9563;
   --amber: #ffb547;
   --amber-dim: #b07a2e;
+  /* the page's accents as they sit on the console's dark glass, in either theme */
+  --crt-teal: #5cd3c6;
+  --crt-teal-dim: #2f9c92;
+  --crt-orange: #ef6a35;
 
   --display: "Shoulders", "Arial Narrow", Impact, sans-serif;
   --sans: "Plex Sans", system-ui, sans-serif;
