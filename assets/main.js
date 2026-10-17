@@ -173,8 +173,8 @@
   for (const k of ["mode", "q", "w", "err", "tip", "lk", "lv", "t"]) out[k] = document.getElementById("t-" + k);
   const cards = document.querySelectorAll(".caps li");
   const css = getComputedStyle(document.querySelector(".console .crt"));
-  const PHOS = css.getPropertyValue("--c").trim() || "#5cd3c6";
-  const DIM = css.getPropertyValue("--cd").trim() || "#2f9c92";
+  const PHOS = css.getPropertyValue("--c").trim() || "#7cf3a2";
+  const DIM = css.getPropertyValue("--cd").trim() || "#3f9563";
   const root = getComputedStyle(document.documentElement);
   const TEAL = root.getPropertyValue("--crt-teal").trim() || "#5cd3c6", TEAL_DIM = root.getPropertyValue("--crt-teal-dim").trim() || "#2f9c92";
   const ORANGE = root.getPropertyValue("--crt-orange").trim() || "#ef6a35";
